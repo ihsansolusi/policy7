@@ -1,0 +1,25 @@
+# Binaries
+bin/
+policy7
+server
+
+# Environment variables
+.env
+.env.local
+
+# Vendor
+vendor/
+
+# Go workspace
+go.work
+go.work.sum
+
+# IDE/OS
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# Test output
+coverage.out
