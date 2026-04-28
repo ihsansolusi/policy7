@@ -33,7 +33,7 @@ func TestGetParameter(t *testing.T) {
 	// Setup service with mock DB and nil cache
 	db := &mockQuerier{}
 	svc := service.NewParameterService(db, nil)
-	adminSvc := service.NewAdminParameterService(db, nil)
+	adminSvc := service.NewAdminParameterService(db, nil, nil)
 
 	r := gin.Default()
 	SetupRoutes(r, svc, adminSvc)
@@ -41,6 +41,8 @@ func TestGetParameter(t *testing.T) {
 	req, _ := http.NewRequest(http.MethodGet, "/v1/params/transaction_limit/teller_transfer_max", nil)
 	// Add required header
 	req.Header.Set("X-Org-ID", uuid.New().String())
+	req.Header.Set("X-Service-ID", "test")
+	req.Header.Set("X-API-Key", "test-key")
 	
 	w := httptest.NewRecorder()
 
@@ -56,7 +58,7 @@ func TestValidateTransactionLimit(t *testing.T) {
 
 	db := &mockQuerier{}
 	svc := service.NewParameterService(db, nil)
-	adminSvc := service.NewAdminParameterService(db, nil)
+	adminSvc := service.NewAdminParameterService(db, nil, nil)
 
 	r := gin.Default()
 	SetupRoutes(r, svc, adminSvc)
@@ -69,6 +71,8 @@ func TestValidateTransactionLimit(t *testing.T) {
 
 	req, _ := http.NewRequest(http.MethodPost, "/v1/params/transaction_limit/validate", bytes.NewBuffer(body))
 	req.Header.Set("X-Org-ID", uuid.New().String())
+	req.Header.Set("X-Service-ID", "test")
+	req.Header.Set("X-API-Key", "test-key")
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)

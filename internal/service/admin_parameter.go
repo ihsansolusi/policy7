@@ -12,14 +12,16 @@ import (
 )
 
 type AdminParameterService struct {
-	db    store.Querier
-	cache *store.RedisCache
+	db        store.Querier
+	cache     *store.RedisCache
+	publisher *NATSClient
 }
 
-func NewAdminParameterService(db store.Querier, cache *store.RedisCache) *AdminParameterService {
+func NewAdminParameterService(db store.Querier, cache *store.RedisCache, publisher *NATSClient) *AdminParameterService {
 	return &AdminParameterService{
-		db:    db,
-		cache: cache,
+		db:        db,
+		cache:     cache,
+		publisher: publisher,
 	}
 }
 
@@ -40,6 +42,13 @@ func (s *AdminParameterService) Create(ctx context.Context, arg store.CreatePara
 	})
 	if err != nil {
 		fmt.Printf("failed to create history: %v\n", err)
+	}
+
+	// Publish Event
+	if s.publisher != nil {
+		orgIDBytes := param.OrgID.Bytes
+		orgID, _ := uuid.FromBytes(orgIDBytes[:])
+		_ = s.publisher.PublishParameterEvent(ctx, "policy7.params.created", orgID.String(), param)
 	}
 
 	return &param, nil
@@ -117,6 +126,13 @@ func (s *AdminParameterService) Delete(ctx context.Context, id uuid.UUID, orgID 
 		_ = s.cache.DelPattern(ctx, pattern)
 	}
 
+	// Publish Event
+	if s.publisher != nil {
+		orgIDBytes := param.OrgID.Bytes
+		orgID, _ := uuid.FromBytes(orgIDBytes[:])
+		_ = s.publisher.PublishParameterEvent(ctx, "policy7.params.deleted", orgID.String(), param)
+	}
+
 	return nil
 }
 
@@ -179,6 +195,13 @@ func (s *AdminParameterService) Update(ctx context.Context, id uuid.UUID, orgID 
 	if s.cache != nil {
 		pattern := fmt.Sprintf("policy7:%s:%s:*", orgID.String(), oldParam.Category)
 		_ = s.cache.DelPattern(ctx, pattern)
+	}
+
+	// Publish Event
+	if s.publisher != nil {
+		orgIDBytes := newParam.OrgID.Bytes
+		orgID, _ := uuid.FromBytes(orgIDBytes[:])
+		_ = s.publisher.PublishParameterEvent(ctx, "policy7.params.updated", orgID.String(), newParam)
 	}
 
 	return &newParam, nil

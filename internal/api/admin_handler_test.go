@@ -39,7 +39,7 @@ func TestAdminCreateParameter(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := &mockAdminQuerier{}
-	adminSvc := service.NewAdminParameterService(db, nil)
+	adminSvc := service.NewAdminParameterService(db, nil, nil)
 
 	r := gin.Default()
 	adminHandler := NewAdminHandler(adminSvc)
