@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -121,19 +122,21 @@ func (h *AdminHandler) Create(c *gin.Context) {
 	}
 
 	param, err := h.svc.Create(c.Request.Context(), store.CreateParameterParams{
-		OrgID:         pgOrgID,
-		Category:      req.Category,
-		Name:          req.Name,
-		AppliesTo:     req.AppliesTo,
-		AppliesToID:   appliesToID,
-		Product:       product,
-		Value:         req.Value,
-		ValueType:     req.ValueType,
-		Unit:          unit,
-		Scope:         scope,
-		IsActive:      true,
-		Version:       1,
-		CreatedBy:     pgUserID,
+		OrgID:          pgOrgID,
+		Category:       req.Category,
+		Name:           req.Name,
+		AppliesTo:      req.AppliesTo,
+		AppliesToID:    appliesToID,
+		Product:        product,
+		Value:          req.Value,
+		ValueType:      req.ValueType,
+		Unit:           unit,
+		Scope:          scope,
+		EffectiveFrom:  pgtype.Timestamptz{Time: time.Now(), Valid: true},
+		EffectiveUntil: pgtype.Timestamptz{Valid: false},
+		IsActive:       true,
+		Version:        1,
+		CreatedBy:      pgUserID,
 	}, req.ChangeReason)
 
 	if err != nil {

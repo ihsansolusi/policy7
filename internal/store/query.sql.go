@@ -7,6 +7,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -29,7 +30,7 @@ type CreateParameterParams struct {
 	AppliesTo      string             `json:"applies_to"`
 	AppliesToID    pgtype.Text        `json:"applies_to_id"`
 	Product        pgtype.Text        `json:"product"`
-	Value          []byte             `json:"value"`
+	Value          json.RawMessage    `json:"value"`
 	ValueType      string             `json:"value_type"`
 	Unit           pgtype.Text        `json:"unit"`
 	Scope          pgtype.Text        `json:"scope"`
@@ -94,16 +95,16 @@ RETURNING id, parameter_id, org_id, previous_value, new_value, change_type, prev
 `
 
 type CreateParameterHistoryParams struct {
-	ParameterID     pgtype.UUID `json:"parameter_id"`
-	OrgID           pgtype.UUID `json:"org_id"`
-	PreviousValue   []byte      `json:"previous_value"`
-	NewValue        []byte      `json:"new_value"`
-	ChangeType      string      `json:"change_type"`
-	PreviousVersion pgtype.Int4 `json:"previous_version"`
-	NewVersion      int32       `json:"new_version"`
-	ChangeReason    pgtype.Text `json:"change_reason"`
-	ChangeMetadata  []byte      `json:"change_metadata"`
-	ChangedBy       pgtype.UUID `json:"changed_by"`
+	ParameterID     pgtype.UUID     `json:"parameter_id"`
+	OrgID           pgtype.UUID     `json:"org_id"`
+	PreviousValue   json.RawMessage `json:"previous_value"`
+	NewValue        json.RawMessage `json:"new_value"`
+	ChangeType      string          `json:"change_type"`
+	PreviousVersion pgtype.Int4     `json:"previous_version"`
+	NewVersion      int32           `json:"new_version"`
+	ChangeReason    pgtype.Text     `json:"change_reason"`
+	ChangeMetadata  json.RawMessage `json:"change_metadata"`
+	ChangedBy       pgtype.UUID     `json:"changed_by"`
 }
 
 func (q *Queries) CreateParameterHistory(ctx context.Context, arg CreateParameterHistoryParams) (ParameterHistory, error) {

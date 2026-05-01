@@ -5,6 +5,8 @@
 package store
 
 import (
+	"encoding/json"
+
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -20,7 +22,7 @@ type Parameter struct {
 	AppliesToID pgtype.Text `json:"applies_to_id"`
 	Product     pgtype.Text `json:"product"`
 	// JSONB value - can be number, string, object, or array
-	Value          []byte             `json:"value"`
+	Value          json.RawMessage    `json:"value"`
 	ValueType      string             `json:"value_type"`
 	Unit           pgtype.Text        `json:"unit"`
 	Scope          pgtype.Text        `json:"scope"`
@@ -41,8 +43,8 @@ type ParameterCategory struct {
 	Code         string             `json:"code"`
 	Name         string             `json:"name"`
 	Description  pgtype.Text        `json:"description"`
-	ValueSchema  []byte             `json:"value_schema"`
-	DefaultValue []byte             `json:"default_value"`
+	ValueSchema  json.RawMessage    `json:"value_schema"`
+	DefaultValue json.RawMessage    `json:"default_value"`
 	DisplayOrder pgtype.Int4        `json:"display_order"`
 	Icon         pgtype.Text        `json:"icon"`
 	Color        pgtype.Text        `json:"color"`
@@ -53,17 +55,17 @@ type ParameterCategory struct {
 
 // Audit trail for all parameter changes
 type ParameterHistory struct {
-	ID              pgtype.UUID `json:"id"`
-	ParameterID     pgtype.UUID `json:"parameter_id"`
-	OrgID           pgtype.UUID `json:"org_id"`
-	PreviousValue   []byte      `json:"previous_value"`
-	NewValue        []byte      `json:"new_value"`
-	ChangeType      string      `json:"change_type"`
-	PreviousVersion pgtype.Int4 `json:"previous_version"`
-	NewVersion      int32       `json:"new_version"`
+	ID              pgtype.UUID     `json:"id"`
+	ParameterID     pgtype.UUID     `json:"parameter_id"`
+	OrgID           pgtype.UUID     `json:"org_id"`
+	PreviousValue   json.RawMessage `json:"previous_value"`
+	NewValue        json.RawMessage `json:"new_value"`
+	ChangeType      string          `json:"change_type"`
+	PreviousVersion pgtype.Int4     `json:"previous_version"`
+	NewVersion      int32           `json:"new_version"`
 	// Required for update operations - business justification
 	ChangeReason   pgtype.Text        `json:"change_reason"`
-	ChangeMetadata []byte             `json:"change_metadata"`
+	ChangeMetadata json.RawMessage    `json:"change_metadata"`
 	ChangedBy      pgtype.UUID        `json:"changed_by"`
 	ChangedAt      pgtype.Timestamptz `json:"changed_at"`
 }
