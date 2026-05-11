@@ -1,12 +1,15 @@
 # Policy7 — Spec 04: Integration
 
-> **Versi**: 0.1-draft | **Tanggal**: 2026-04-27 | **Fase**: Review
+> **Versi**: 0.2-draft | **Tanggal**: 2026-05-11 | **Fase**: W1 Authority Lock
 
 ---
 
 ## 1. Integration Overview
 
 Policy7 adalah service terpusat untuk business parameters yang di-consume oleh berbagai services di ekosistem Core7. Spec ini mendefinisikan integration patterns dengan semua consumer services.
+
+Boundary referensi:
+- [`docs/architecture/auth7-policy7-enterprise-boundary.md`](../../../../docs/architecture/auth7-policy7-enterprise-boundary.md)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -39,6 +42,11 @@ Policy7 adalah service terpusat untuk business parameters yang di-consume oleh b
 ---
 
 ## 2. Auth7 Integration
+
+Guardrail authority:
+- `auth7` mengkonsumsi `policy7` sebagai sumber parameter untuk ABAC input.
+- `auth7` tidak mengambil ownership policy categories, parameter values, atau admin lifecycle policy.
+- ownership permission, role, dan session tetap di `auth7`; ownership policy/parameter tetap di `policy7`.
 
 ### 2.1 Use Case: OPA Query Policy7 untuk ABAC Parameters
 
@@ -171,6 +179,8 @@ Core7 Enterprise (bos7-enterprise, financing, treasury, dll) perlu validasi tran
 └──────────────────┘      └──────────┘      └──────────┘
 ```
 
+`bos7-enterprise` adalah admin UI utama untuk policy management, tetapi policy CRUD tetap dieksekusi melalui admin API `policy7`.
+
 **Transaction Validation Flow:**
 
 ```
@@ -257,6 +267,30 @@ func (s *TransactionService) ValidateAndProcess(ctx context.Context, tx *Transac
     }
 }
 ```
+
+### 3.2 Enterprise Admin UI Integration
+
+`bos7-enterprise` mengkonsumsi admin API policy7 untuk workspace Policy Management:
+
+- transaction limits
+- approval thresholds
+- operational hours
+- product access
+- rates
+- fees
+- regulatory parameters
+
+Context minimum dari caller yang harus didukung:
+- `org_id`
+- `branch_id` bila relevan
+- `user_id` untuk audit/change attribution
+- `role_id` atau role code bila relevan
+- `product` bila parameter bersifat product-specific
+
+Authority lock:
+- `bos7-enterprise` adalah primary admin UI consumer untuk policy screens.
+- semua create/update/delete policy dieksekusi via admin API `policy7` (`/admin/v1/*`).
+- `bos7-enterprise` tidak menjadi backend authority policy.
 
 ### 3.2 Core7 → Policy7 API Endpoints
 

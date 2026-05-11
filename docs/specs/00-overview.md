@@ -1,6 +1,6 @@
 # Policy7 — Spec 00: Overview & Vision
 
-> **Versi**: 1.0-draft | **Tanggal**: 2026-04-24 | **Fase**: Brainstorming
+> **Versi**: 1.1-draft | **Tanggal**: 2026-05-11 | **Fase**: W1 Authority Lock
 
 ---
 
@@ -29,6 +29,25 @@ Tanpa service terpisah, parameter ini tersebar di masing-masing service (core7 e
 > parameter bisnis real-time, versioned, auditable, yang bisa dikonsumsi oleh semua service
 > (auth7, core7 enterprise, workflow7, notif7) via REST API.
 
+### 2.1 Boundary Alignment
+
+Boundary referensi:
+- [`docs/architecture/auth7-policy7-enterprise-boundary.md`](../../../../docs/architecture/auth7-policy7-enterprise-boundary.md)
+
+Keputusan yang dikunci:
+- `policy7` adalah source of truth tunggal untuk policy dan parameter bisnis
+- `bos7-enterprise` adalah admin UI utama yang mengkonsumsi `/admin/v1/*` milik policy7
+- `auth7` mengkonsumsi policy7 hanya sebagai input parameterized ABAC, bukan untuk permission ownership
+- `core7-service-enterprise` mengkonsumsi policy7 untuk validasi dan decision support
+
+### 2.2 Wave 1 Backend Authority Lock (Plan 12)
+
+Lock statement untuk stream `policy7` (epic `policy7#57`, child `#58 #59 #60`):
+
+1. Ownership `policy7` untuk policy/parameter bersifat tunggal pada steady-state runtime.
+2. Authority admin API policy berada di `policy7`; `bos7-enterprise` hanya consumer/facade UI.
+3. Konsumsi `auth7 -> policy7` dibatasi sebagai ABAC input data, bukan ownership permission/role.
+
 ---
 
 ## 3. Scope Parameter
@@ -53,6 +72,7 @@ Tanpa service terpisah, parameter ini tersebar di masing-masing service (core7 e
 - **Role & permission definition** — tetap di auth7
 - **Approval flow orchestration** — tetap di workflow7
 - **Real-time scoring engine** — v2.0 (credit scoring, risk rating)
+- **User/role/session lifecycle** — tetap di auth7
 
 ---
 
@@ -125,6 +145,12 @@ allow {
 
 ABAC boolean rules (allow/deny) tetap di auth7.
 Policy7 hanya menyimpan **data parameter** yang dipakai ABAC rules.
+
+Policy7 juga tidak menjadi owner:
+- user identity
+- role definition
+- permission definition
+- session state
 
 ---
 
