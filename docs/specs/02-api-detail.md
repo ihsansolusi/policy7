@@ -1,6 +1,6 @@
 # Policy7 — Spec 02: API Detail
 
-> **Versi**: 0.1-draft | **Tanggal**: 2026-04-27 | **Fase**: Review
+> **Versi**: 0.3-draft | **Tanggal**: 2026-05-13 | **Fase**: Plan 13 W2 Policy Facade Contract Lock
 
 ---
 
@@ -12,6 +12,8 @@ Policy7 menyediakan dua jenis API:
 |----------|--------|---------|------|
 | **Public API** | `/v1/` | Query parameter (read-only) | JWT atau API Key |
 | **Admin API** | `/admin/v1/` | CRUD parameter | JWT (admin role) |
+
+Admin API policy7 adalah backend authority untuk policy administration. Consumer UI utamanya adalah `bos7-enterprise`, bukan `auth7-ui`.
 
 ### 1.1 Base URL
 
@@ -51,6 +53,43 @@ Error response:
 }
 ```
 
+### 1.4 Contract Scope Guardrails (W2)
+
+- Wave 2 hanya mendefinisikan kontrak category/context/error; belum termasuk wiring.
+- `policy7` tetap single source of truth untuk policy/parameter.
+- Consumer (`bos7-enterprise`, `auth7`, service lain) mengakses kontrak ini sebagai facade/integration consumer, bukan owner data.
+
+### 1.5 Policy Category Contract for Enterprise Screens
+
+| Enterprise Screen Group | Category Code | Required Context | Notes |
+|---|---|---|---|
+| Transaction Limits | `transaction_limit` | `org_id`, `role_id/role_code`, `product` | Mendukung `transaction_limit` + `authorization_limit` di value |
+| Approval Thresholds | `approval_threshold` | `org_id`, `role_id/role_code`, `product` | Menentukan ambang approval dan target approver |
+| Operational Hours | `operational_hours` | `org_id`, `role_id/role_code` | `product` opsional |
+| Product Access | `product_access` | `org_id`, `role_id/role_code`, `product` | Product-scoped access policy |
+| Rates | `rate` | `org_id`, `product` | Tenor/variant dipetakan via `name`/value |
+| Fees | `fee` | `org_id`, `product` | Channel/variant dipetakan via `name`/value |
+| Regulatory Thresholds | `regulatory_threshold` | `org_id` | `branch_id` required bila branch-scoped |
+
+### 1.6 Bos7 Policy Management Route Contract (Plan 13 W2)
+
+Mapping screen-group policy management ke endpoint `policy7`:
+
+| Screen Group (bos7-enterprise) | Endpoint policy7 | Method | API Owner | Data Owner | Notes |
+|---|---|---|---|---|---|
+| Policy List | `/admin/v1/params` | `GET` | `policy7` | `policy7` | Listing/filter policy parameters |
+| Policy Detail | `/admin/v1/params/:id` | `GET` | `policy7` | `policy7` | Detail parameter version aktif |
+| Policy Create | `/admin/v1/params` | `POST` | `policy7` | `policy7` | Wajib `change_reason` untuk audit |
+| Policy Update | `/admin/v1/params/:id` | `PUT` | `policy7` | `policy7` | Mutasi value policy + versioning |
+| Policy Delete (soft) | `/admin/v1/params/:id` | `DELETE` | `policy7` | `policy7` | Soft delete + history |
+| Policy History | `/admin/v1/params/:id/history` | `GET` | `policy7` | `policy7` | Audit trail parameter |
+| Policy Bulk Import | `/admin/v1/params/bulk-import` | `POST` | `policy7` | `policy7` | Batch create/update policy set |
+
+Non-overlap guardrail:
+- Route policy management di `bos7-enterprise` tidak boleh memakai IAM admin API untuk ownership policy data.
+- `policy7` tidak menerima ownership permission/role/session lifecycle.
+- Approval lifecycle orchestration tidak masuk scope policy facade; tetap di workflow/consumer layer.
+
 ---
 
 ## 2. Authentication
@@ -75,6 +114,38 @@ X-Org-ID: <org_uuid>
 ```
 
 Digunakan oleh internal services (workflow7, notif7, dll).
+
+### 2.3 Boundary Notes
+
+- `policy7` admin API tetap authoritative walaupun UI utamanya ditempatkan di `bos7-enterprise`
+- `auth7` boleh memanggil public policy query APIs untuk kebutuhan ABAC input
+- `core7-service-enterprise` boleh memanggil public policy query APIs untuk validation dan decision support
+- `policy7` menerima `org_id`, `branch_id`, `user_id`, `role_id`, dan `product` sebagai context caller, tetapi identifier tersebut tetap dimiliki domain lain
+
+### 2.4 Caller Context Contract and Validation Rules (W2)
+
+Canonical context fields:
+
+| Field | Required | Format | Rule |
+|---|---|---|---|
+| `org_id` | Yes | UUID | Wajib untuk semua endpoint |
+| `branch_id` | Conditional | UUID | Wajib jika `applies_to=branch` atau category branch-scoped |
+| `user_id` | Conditional | UUID/string | Wajib untuk mutation `/admin/v1/*` (`POST/PUT/PATCH/DELETE`) |
+| `role_id` atau `role_code` | Conditional | UUID/string | Salah satu wajib untuk role-scoped policy |
+| `product` | Conditional | string | Wajib untuk category `transaction_limit`, `product_access`, `rate`, `fee` yang product-specific |
+| `effective_date` | Conditional | RFC3339 timestamp | Wajib jika caller meminta simulasi/effective lookup pada tanggal tertentu |
+| `reason` | Conditional | string | Wajib untuk admin mutation sebagai business/audit reason (`change_reason`) |
+
+Validation summary:
+
+1. Missing `org_id` -> `400 INVALID_CALLER_CONTEXT`.
+2. Branch-scoped request tanpa `branch_id` -> `400 INVALID_CALLER_CONTEXT`.
+3. Admin mutation tanpa `user_id` -> `400 INVALID_CALLER_CONTEXT`.
+4. Role-scoped request tanpa `role_id` dan `role_code` -> `400 INVALID_CALLER_CONTEXT`.
+5. Category product-scoped tanpa `product` -> `400 INVALID_CALLER_CONTEXT`.
+6. Context tenant mismatch -> `403 TENANT_SCOPE_VIOLATION`.
+7. Missing `reason` pada admin mutation -> `400 INVALID_CALLER_CONTEXT`.
+8. Invalid `effective_date` format -> `400 INVALID_CALLER_CONTEXT`.
 
 ---
 
@@ -888,6 +959,41 @@ Query params:
 | `PARAMETER_EXPIRED` | 410 | Parameter sudah expired |
 | `CACHE_UNAVAILABLE` | 503 | Cache service unavailable |
 | `RATE_LIMIT_EXCEEDED` | 429 | Too many requests |
+
+### 6.1 Policy Error Contract for Facade Consumers (W2)
+
+Error envelope:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "INVALID_CALLER_CONTEXT",
+    "message": "org_id is required",
+    "http_status": 400,
+    "retryable": false,
+    "details": {
+      "field": "org_id",
+      "reason": "missing"
+    },
+    "trace_id": "01HZX..."
+  }
+}
+```
+
+Additional contract codes for facade consumers:
+
+| Code | HTTP | Retryable | Usage |
+|---|---|---|---|
+| `INVALID_CALLER_CONTEXT` | 400 | No | Context wajib tidak ada/invalid |
+| `TENANT_SCOPE_VIOLATION` | 403 | No | `org_id` tidak cocok dengan caller scope |
+| `INVALID_PARAMETER_SHAPE` | 422 | No | Payload value tidak sesuai category schema |
+| `CATEGORY_NOT_CONFIGURED` | 404 | No | Category belum aktif/terdaftar untuk org |
+| `POLICY_BACKEND_UNAVAILABLE` | 503 | Yes | Backend policy7 sementara unavailable |
+
+Facade conformance requirement:
+- `bos7-enterprise` wajib membaca `error.code`, `error.details`, dan `error.trace_id` untuk handling UX dan support correlation.
+- Error envelope ini khusus surface policy facade; tidak boleh diinterpretasikan sebagai IAM permission ownership contract.
 
 ---
 
