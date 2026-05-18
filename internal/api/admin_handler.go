@@ -2,15 +2,17 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/ihsansolusi/policy7/internal/service"
 	"github.com/ihsansolusi/policy7/internal/store"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type AdminHandler struct {
@@ -41,13 +43,26 @@ func (h *AdminHandler) List(c *gin.Context) {
 		}
 	}
 
-	params, err := h.svc.List(c.Request.Context(), orgID, limit, offset)
+	// Optional filters: empty string means "skip that filter".
+	category := c.Query("category")
+	product := c.Query("product")
+	appliesTo := c.Query("applies_to")
+
+	var (
+		params []store.Parameter
+		err    error
+	)
+	if category == "" && product == "" && appliesTo == "" {
+		params, err = h.svc.List(c.Request.Context(), orgID, limit, offset)
+	} else {
+		params, err = h.svc.ListFiltered(c.Request.Context(), orgID, category, product, appliesTo, limit, offset)
+	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeError(c, http.StatusInternalServerError, "POLICY_BACKEND_UNAVAILABLE", "failed to list parameters", true, nil)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": params})
+	writeSuccess(c, http.StatusOK, params)
 }
 
 func (h *AdminHandler) GetByID(c *gin.Context) {
@@ -58,17 +73,17 @@ func (h *AdminHandler) GetByID(c *gin.Context) {
 
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid parameter ID format"})
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "invalid parameter ID format", false, gin.H{"field": "id"})
 		return
 	}
 
 	param, err := h.svc.GetByID(c.Request.Context(), id, orgID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		writeError(c, http.StatusNotFound, "PARAMETER_NOT_FOUND", err.Error(), false, nil)
 		return
 	}
 
-	c.JSON(http.StatusOK, param)
+	writeSuccess(c, http.StatusOK, param)
 }
 
 func (h *AdminHandler) Create(c *gin.Context) {
@@ -83,20 +98,24 @@ func (h *AdminHandler) Create(c *gin.Context) {
 	}
 
 	var req struct {
-		Category       string          `json:"category"`
-		Name           string          `json:"name"`
-		AppliesTo      string          `json:"applies_to"`
-		AppliesToID    *string         `json:"applies_to_id"`
-		Product        *string         `json:"product"`
-		Value          json.RawMessage `json:"value"`
-		ValueType      string          `json:"value_type"`
-		Unit           *string         `json:"unit"`
-		Scope          *string         `json:"scope"`
-		ChangeReason   string          `json:"change_reason"`
+		Category     string          `json:"category"`
+		Name         string          `json:"name"`
+		AppliesTo    string          `json:"applies_to"`
+		AppliesToID  *string         `json:"applies_to_id"`
+		Product      *string         `json:"product"`
+		Value        json.RawMessage `json:"value"`
+		ValueType    string          `json:"value_type"`
+		Unit         *string         `json:"unit"`
+		Scope        *string         `json:"scope"`
+		ChangeReason string          `json:"change_reason"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		writeError(c, http.StatusBadRequest, "INVALID_REQUEST", err.Error(), false, nil)
+		return
+	}
+	if err := validateCategoryContext(req.Category, req.AppliesTo, req.AppliesToID, req.Product); err != nil {
+		writeError(c, http.StatusUnprocessableEntity, "INVALID_CALLER_CONTEXT", err.Error(), false, nil)
 		return
 	}
 
@@ -140,11 +159,17 @@ func (h *AdminHandler) Create(c *gin.Context) {
 	}, req.ChangeReason)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeError(c, http.StatusInternalServerError, "POLICY_BACKEND_UNAVAILABLE", err.Error(), true, nil)
 		return
 	}
 
-	c.JSON(http.StatusCreated, param)
+	writeSuccess(c, http.StatusCreated, gin.H{
+		"parameter": param,
+		"audit": gin.H{
+			"history_change_type": "create",
+			"event_type":          "policy7.params.created",
+		},
+	})
 }
 
 func (h *AdminHandler) Update(c *gin.Context) {
@@ -160,7 +185,7 @@ func (h *AdminHandler) Update(c *gin.Context) {
 
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid parameter ID"})
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "invalid parameter ID", false, gin.H{"field": "id"})
 		return
 	}
 
@@ -170,17 +195,31 @@ func (h *AdminHandler) Update(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		writeError(c, http.StatusBadRequest, "INVALID_REQUEST", err.Error(), false, nil)
+		return
+	}
+	if len(req.Value) == 0 {
+		writeError(c, http.StatusUnprocessableEntity, "INVALID_PARAMETER_SHAPE", "value is required", false, gin.H{"field": "value"})
 		return
 	}
 
 	param, err := h.svc.Update(c.Request.Context(), id, orgID, userID, req.Value, req.ChangeReason)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		if strings.Contains(err.Error(), "inactive parameter") {
+			writeError(c, http.StatusConflict, "POLICY_CONFLICT", err.Error(), false, nil)
+			return
+		}
+		writeError(c, http.StatusInternalServerError, "POLICY_BACKEND_UNAVAILABLE", err.Error(), true, nil)
 		return
 	}
 
-	c.JSON(http.StatusOK, param)
+	writeSuccess(c, http.StatusOK, gin.H{
+		"parameter": param,
+		"audit": gin.H{
+			"history_change_type": "update",
+			"event_type":          "policy7.params.updated",
+		},
+	})
 }
 
 func (h *AdminHandler) Delete(c *gin.Context) {
@@ -196,7 +235,7 @@ func (h *AdminHandler) Delete(c *gin.Context) {
 
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid parameter ID"})
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "invalid parameter ID", false, gin.H{"field": "id"})
 		return
 	}
 
@@ -205,17 +244,21 @@ func (h *AdminHandler) Delete(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		writeError(c, http.StatusBadRequest, "INVALID_REQUEST", err.Error(), false, nil)
+		return
+	}
+	if strings.TrimSpace(req.ChangeReason) == "" {
+		writeError(c, http.StatusUnprocessableEntity, "INVALID_CALLER_CONTEXT", "change_reason is required", false, gin.H{"field": "change_reason"})
 		return
 	}
 
 	err = h.svc.Delete(c.Request.Context(), id, orgID, userID, req.ChangeReason)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeError(c, http.StatusInternalServerError, "POLICY_BACKEND_UNAVAILABLE", err.Error(), true, nil)
 		return
 	}
 
-	c.JSON(http.StatusNoContent, nil)
+	writeNoContent(c)
 }
 
 func (h *AdminHandler) GetHistory(c *gin.Context) {
@@ -226,17 +269,17 @@ func (h *AdminHandler) GetHistory(c *gin.Context) {
 
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid parameter ID format"})
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "invalid parameter ID format", false, gin.H{"field": "id"})
 		return
 	}
 
 	histories, err := h.svc.GetHistory(c.Request.Context(), id, orgID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeError(c, http.StatusInternalServerError, "POLICY_BACKEND_UNAVAILABLE", err.Error(), true, nil)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": histories})
+	writeSuccess(c, http.StatusOK, histories)
 }
 
 func (h *AdminHandler) BulkImport(c *gin.Context) {
@@ -262,7 +305,7 @@ func (h *AdminHandler) BulkImport(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		writeError(c, http.StatusBadRequest, "INVALID_REQUEST", err.Error(), false, nil)
 		return
 	}
 
@@ -300,26 +343,28 @@ func (h *AdminHandler) BulkImport(c *gin.Context) {
 
 	count, err := h.svc.BulkImport(c.Request.Context(), orgID, userID, paramsToCreate)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeError(c, http.StatusInternalServerError, "POLICY_BACKEND_UNAVAILABLE", err.Error(), true, nil)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message":       "bulk import completed",
-		"success_count": count,
-		"total_count":   len(req),
+	writeSuccess(c, http.StatusOK, gin.H{
+		"message": "bulk import completed",
+		"summary": gin.H{
+			"success_count": count,
+			"total_count":   len(req),
+		},
 	})
 }
 
 func getOrgID(c *gin.Context) (uuid.UUID, bool) {
 	orgIDStr := c.GetHeader("X-Org-ID")
 	if orgIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "X-Org-ID header is required"})
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "X-Org-ID header is required", false, gin.H{"field": "org_id"})
 		return uuid.Nil, false
 	}
 	orgID, err := uuid.Parse(orgIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID format"})
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "invalid org ID format", false, gin.H{"field": "org_id"})
 		return uuid.Nil, false
 	}
 	return orgID, true
@@ -328,13 +373,36 @@ func getOrgID(c *gin.Context) (uuid.UUID, bool) {
 func getUserID(c *gin.Context) (uuid.UUID, bool) {
 	userIDStr := c.GetHeader("X-User-ID")
 	if userIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "X-User-ID header is required"})
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "X-User-ID header is required", false, gin.H{"field": "user_id"})
 		return uuid.Nil, false
 	}
 	userID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user ID format"})
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "invalid user ID format", false, gin.H{"field": "user_id"})
 		return uuid.Nil, false
 	}
 	return userID, true
+}
+
+func validateCategoryContext(category, appliesTo string, appliesToID, product *string) error {
+	supported := map[string]bool{
+		"transaction_limit":    true,
+		"approval_threshold":   true,
+		"operational_hours":    true,
+		"product_access":       true,
+		"rate":                 true,
+		"fee":                  true,
+		"regulatory_threshold": true,
+	}
+	if !supported[category] {
+		return errors.New("unsupported category")
+	}
+	if appliesTo == "branch" && (appliesToID == nil || strings.TrimSpace(*appliesToID) == "") {
+		return errors.New("applies_to_id is required for branch scope")
+	}
+	productScoped := category == "transaction_limit" || category == "product_access" || category == "rate" || category == "fee"
+	if productScoped && (product == nil || strings.TrimSpace(*product) == "") {
+		return errors.New("product is required for this category")
+	}
+	return nil
 }

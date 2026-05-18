@@ -342,3 +342,71 @@ func (q *Queries) ListParameters(ctx context.Context, arg ListParametersParams) 
 	}
 	return items, nil
 }
+
+const listParametersFiltered = `-- name: ListParametersFiltered :many
+SELECT id, org_id, category, name, applies_to, applies_to_id, product, value, value_type, unit, scope, effective_from, effective_until, version, is_active, created_by, created_at, updated_at FROM parameters
+WHERE org_id = $1
+  AND ($4::TEXT IS NULL OR category = $4::TEXT)
+  AND ($5::TEXT IS NULL OR product = $5::TEXT)
+  AND ($6::TEXT IS NULL OR applies_to = $6::TEXT)
+  AND is_active = TRUE
+ORDER BY name ASC, created_at DESC
+LIMIT $2 OFFSET $3
+`
+
+type ListParametersFilteredParams struct {
+	OrgID     pgtype.UUID `json:"org_id"`
+	Limit     int32       `json:"limit"`
+	Offset    int32       `json:"offset"`
+	Category  pgtype.Text `json:"category"`
+	Product   pgtype.Text `json:"product"`
+	AppliesTo pgtype.Text `json:"applies_to"`
+}
+
+// List parameters with optional category/product/applies_to filters.
+// Pass NULL to skip a filter. Used by admin UI list pages.
+func (q *Queries) ListParametersFiltered(ctx context.Context, arg ListParametersFilteredParams) ([]Parameter, error) {
+	rows, err := q.db.Query(ctx, listParametersFiltered,
+		arg.OrgID,
+		arg.Limit,
+		arg.Offset,
+		arg.Category,
+		arg.Product,
+		arg.AppliesTo,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Parameter{}
+	for rows.Next() {
+		var i Parameter
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrgID,
+			&i.Category,
+			&i.Name,
+			&i.AppliesTo,
+			&i.AppliesToID,
+			&i.Product,
+			&i.Value,
+			&i.ValueType,
+			&i.Unit,
+			&i.Scope,
+			&i.EffectiveFrom,
+			&i.EffectiveUntil,
+			&i.Version,
+			&i.IsActive,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

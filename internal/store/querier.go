@@ -16,6 +16,9 @@ type Querier interface {
 	GetParameterByID(ctx context.Context, arg GetParameterByIDParams) (Parameter, error)
 	GetParameterHistory(ctx context.Context, arg GetParameterHistoryParams) ([]ParameterHistory, error)
 	ListParameters(ctx context.Context, arg ListParametersParams) ([]Parameter, error)
+	// List parameters with optional category/product/applies_to filters.
+	// Pass NULL to skip a filter. Used by admin UI list pages.
+	ListParametersFiltered(ctx context.Context, arg ListParametersFilteredParams) ([]Parameter, error)
 }
 
 var _ Querier = (*Queries)(nil)

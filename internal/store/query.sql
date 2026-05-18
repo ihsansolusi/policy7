@@ -32,6 +32,18 @@ WHERE org_id = $1
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3;
 
+-- name: ListParametersFiltered :many
+-- List parameters with optional category/product/applies_to filters.
+-- Pass NULL to skip a filter. Used by admin UI list pages.
+SELECT * FROM parameters
+WHERE org_id = $1
+  AND (sqlc.narg('category')::TEXT IS NULL OR category = sqlc.narg('category')::TEXT)
+  AND (sqlc.narg('product')::TEXT IS NULL OR product = sqlc.narg('product')::TEXT)
+  AND (sqlc.narg('applies_to')::TEXT IS NULL OR applies_to = sqlc.narg('applies_to')::TEXT)
+  AND is_active = TRUE
+ORDER BY name ASC, created_at DESC
+LIMIT $2 OFFSET $3;
+
 -- name: DeactivateParameter :exec
 UPDATE parameters
 SET is_active = FALSE, updated_at = NOW()

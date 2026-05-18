@@ -87,6 +87,34 @@ func (s *AdminParameterService) List(ctx context.Context, orgID uuid.UUID, limit
 	return params, nil
 }
 
+// ListFiltered lists parameters with optional category / product / applies_to
+// filters. Empty string for a filter means "skip that filter" (matches all).
+// Powers the admin UI list pages (fees, rates, regulatory, etc.).
+func (s *AdminParameterService) ListFiltered(ctx context.Context, orgID uuid.UUID, category, product, appliesTo string, limit, offset int32) ([]store.Parameter, error) {
+	var pgOrgID pgtype.UUID
+	_ = pgOrgID.Scan(orgID.String())
+
+	toPgText := func(v string) pgtype.Text {
+		if v == "" {
+			return pgtype.Text{Valid: false}
+		}
+		return pgtype.Text{String: v, Valid: true}
+	}
+
+	params, err := s.db.ListParametersFiltered(ctx, store.ListParametersFilteredParams{
+		OrgID:     pgOrgID,
+		Limit:     limit,
+		Offset:    offset,
+		Category:  toPgText(category),
+		Product:   toPgText(product),
+		AppliesTo: toPgText(appliesTo),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list parameters (filtered): %w", err)
+	}
+	return params, nil
+}
+
 func (s *AdminParameterService) Delete(ctx context.Context, id uuid.UUID, orgID uuid.UUID, userID uuid.UUID, reason string) error {
 	var pgID, pgOrgID, pgUserID pgtype.UUID
 	_ = pgID.Scan(id.String())
