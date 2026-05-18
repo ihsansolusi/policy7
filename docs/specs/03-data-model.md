@@ -16,6 +16,23 @@
 | **JSONB Value** | Field `value` menggunakan JSONB untuk fleksibilitas tipe data |
 | **snake_case** | Naming convention konsisten |
 
+### 1.1 Boundary Ownership
+
+Boundary referensi:
+- [`docs/architecture/auth7-policy7-enterprise-boundary.md`](../../../../docs/architecture/auth7-policy7-enterprise-boundary.md)
+
+Data model policy7 hanya menjadi owner untuk policy dan parameter bisnis.
+
+Policy7 tidak menjadi owner untuk:
+- `user`
+- `role`
+- `permission`
+- `session`
+- branch master operasional
+- employee master
+
+Field seperti `org_id`, `branch_id`, `user_id`, `role_id`, atau `product` dipakai sebagai context resolution dan external reference saja.
+
 ---
 
 ## 2. PostgreSQL Schema

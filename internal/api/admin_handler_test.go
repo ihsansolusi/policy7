@@ -49,6 +49,7 @@ func TestAdminCreateParameter(t *testing.T) {
 		"category":      "transaction_limit",
 		"name":          "teller_transfer_max",
 		"applies_to":    "global",
+		"product":       "transfer",
 		"value":         json.RawMessage(`{"limit": 1000}`),
 		"value_type":    "json",
 		"change_reason": "initial setup",

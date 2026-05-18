@@ -1,7 +1,7 @@
 # Binaries
 bin/
 policy7
-server
+/server
 
 # Environment variables
 .env

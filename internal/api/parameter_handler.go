@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -24,13 +25,13 @@ func (h *ParameterHandler) GetParameter(c *gin.Context) {
 
 	orgIDStr := c.GetHeader("X-Org-ID")
 	if orgIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "X-Org-ID header is required"})
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "X-Org-ID header is required", false, gin.H{"field": "org_id"})
 		return
 	}
 
 	orgID, err := uuid.Parse(orgIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID format"})
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "invalid org ID format", false, gin.H{"field": "org_id"})
 		return
 	}
 
@@ -51,12 +52,11 @@ func (h *ParameterHandler) GetParameter(c *gin.Context) {
 
 	param, err := h.svc.GetParameter(c.Request.Context(), orgID, category, name, appliesTo, appliesToID, product)
 	if err != nil {
-		// Log error here in a real app
-		c.JSON(http.StatusNotFound, gin.H{"error": "parameter not found"})
+		writeError(c, http.StatusNotFound, "PARAMETER_NOT_FOUND", "parameter not found", false, nil)
 		return
 	}
 
-	c.JSON(http.StatusOK, param)
+	writeSuccess(c, http.StatusOK, param)
 }
 
 func (h *ParameterHandler) GetEffectiveParameter(c *gin.Context) {
@@ -65,13 +65,13 @@ func (h *ParameterHandler) GetEffectiveParameter(c *gin.Context) {
 
 	orgIDStr := c.GetHeader("X-Org-ID")
 	if orgIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "X-Org-ID header is required"})
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "X-Org-ID header is required", false, gin.H{"field": "org_id"})
 		return
 	}
 
 	orgID, err := uuid.Parse(orgIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID format"})
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "invalid org ID format", false, gin.H{"field": "org_id"})
 		return
 	}
 
@@ -100,22 +100,22 @@ func (h *ParameterHandler) GetEffectiveParameter(c *gin.Context) {
 
 	param, err := h.svc.GetEffectiveParameter(c.Request.Context(), orgID, category, name, product, resCtx)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "effective parameter not found"})
+		writeError(c, http.StatusNotFound, "PARAMETER_NOT_FOUND", "effective parameter not found", false, nil)
 		return
 	}
 
-	c.JSON(http.StatusOK, param)
+	writeSuccess(c, http.StatusOK, param)
 }
 
 func (h *ParameterHandler) ValidateTransactionLimit(c *gin.Context) {
 	orgIDStr := c.GetHeader("X-Org-ID")
 	if orgIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "X-Org-ID header is required"})
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "X-Org-ID header is required", false, gin.H{"field": "org_id"})
 		return
 	}
 	orgID, err := uuid.Parse(orgIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID"})
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "invalid org ID", false, gin.H{"field": "org_id"})
 		return
 	}
 
@@ -128,7 +128,19 @@ func (h *ParameterHandler) ValidateTransactionLimit(c *gin.Context) {
 		Product  *string `json:"product"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		writeError(c, http.StatusBadRequest, "INVALID_REQUEST", err.Error(), false, nil)
+		return
+	}
+	if strings.TrimSpace(req.Name) == "" {
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "name is required", false, gin.H{"field": "name"})
+		return
+	}
+	if req.RoleID == nil || strings.TrimSpace(*req.RoleID) == "" {
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "role_id or role_code is required for transaction_limit", false, gin.H{"field": "role_id"})
+		return
+	}
+	if req.Product == nil || strings.TrimSpace(*req.Product) == "" {
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "product is required for transaction_limit", false, gin.H{"field": "product"})
 		return
 	}
 
@@ -141,7 +153,7 @@ func (h *ParameterHandler) ValidateTransactionLimit(c *gin.Context) {
 
 	param, err := h.svc.GetEffectiveParameter(c.Request.Context(), orgID, "transaction_limit", req.Name, req.Product, resCtx)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "limit parameter not found"})
+		writeError(c, http.StatusNotFound, "PARAMETER_NOT_FOUND", "limit parameter not found", false, nil)
 		return
 	}
 
@@ -149,12 +161,12 @@ func (h *ParameterHandler) ValidateTransactionLimit(c *gin.Context) {
 		Limit float64 `json:"limit"`
 	}
 	if err := json.Unmarshal(param.Value, &limitData); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse limit parameter value"})
+		writeError(c, http.StatusUnprocessableEntity, "INVALID_PARAMETER_SHAPE", "failed to parse limit parameter value", false, nil)
 		return
 	}
 
 	isValid := req.Amount <= limitData.Limit
-	c.JSON(http.StatusOK, gin.H{
+	writeSuccess(c, http.StatusOK, gin.H{
 		"is_valid":       isValid,
 		"amount":         req.Amount,
 		"limit":          limitData.Limit,
@@ -177,18 +189,18 @@ func (h *ParameterHandler) GetProductAccess(c *gin.Context) {
 func (h *ParameterHandler) handleCategoryRequest(c *gin.Context, category string) {
 	name := c.Query("name")
 	if name == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "name query parameter is required"})
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "name query parameter is required", false, gin.H{"field": "name"})
 		return
 	}
 
 	orgIDStr := c.GetHeader("X-Org-ID")
 	if orgIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "X-Org-ID header is required"})
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "X-Org-ID header is required", false, gin.H{"field": "org_id"})
 		return
 	}
 	orgID, err := uuid.Parse(orgIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID format"})
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "invalid org ID format", false, gin.H{"field": "org_id"})
 		return
 	}
 
@@ -208,6 +220,15 @@ func (h *ParameterHandler) handleCategoryRequest(c *gin.Context, category string
 		branchID = &b
 	}
 
+	if roleID == nil || strings.TrimSpace(*roleID) == "" {
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "role_id or role_code is required for this category", false, gin.H{"field": "role_id"})
+		return
+	}
+	if (category == "product_access" || category == "approval_threshold") && (product == nil || strings.TrimSpace(*product) == "") {
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "product is required for this category", false, gin.H{"field": "product"})
+		return
+	}
+
 	resCtx := service.ResolutionContext{
 		UserID:   userID,
 		RoleID:   roleID,
@@ -217,11 +238,11 @@ func (h *ParameterHandler) handleCategoryRequest(c *gin.Context, category string
 
 	param, err := h.svc.GetEffectiveParameter(c.Request.Context(), orgID, category, name, product, resCtx)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "effective parameter not found"})
+		writeError(c, http.StatusNotFound, "PARAMETER_NOT_FOUND", "effective parameter not found", false, nil)
 		return
 	}
 
-	c.JSON(http.StatusOK, param)
+	writeSuccess(c, http.StatusOK, param)
 }
 
 func (h *ParameterHandler) GetRates(c *gin.Context) {
@@ -229,12 +250,12 @@ func (h *ParameterHandler) GetRates(c *gin.Context) {
 
 	orgIDStr := c.GetHeader("X-Org-ID")
 	if orgIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "X-Org-ID header is required"})
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "X-Org-ID header is required", false, gin.H{"field": "org_id"})
 		return
 	}
 	orgID, err := uuid.Parse(orgIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID format"})
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "invalid org ID format", false, gin.H{"field": "org_id"})
 		return
 	}
 
@@ -245,10 +266,10 @@ func (h *ParameterHandler) GetRates(c *gin.Context) {
 
 	param, err := h.svc.GetParameter(c.Request.Context(), orgID, "rates", name, "global", nil, &product)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "rate parameter not found"})
+		writeError(c, http.StatusNotFound, "PARAMETER_NOT_FOUND", "rate parameter not found", false, nil)
 		return
 	}
-	c.JSON(http.StatusOK, param)
+	writeSuccess(c, http.StatusOK, param)
 }
 
 func (h *ParameterHandler) GetFees(c *gin.Context) {
@@ -256,12 +277,12 @@ func (h *ParameterHandler) GetFees(c *gin.Context) {
 
 	orgIDStr := c.GetHeader("X-Org-ID")
 	if orgIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "X-Org-ID header is required"})
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "X-Org-ID header is required", false, gin.H{"field": "org_id"})
 		return
 	}
 	orgID, err := uuid.Parse(orgIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID format"})
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "invalid org ID format", false, gin.H{"field": "org_id"})
 		return
 	}
 
@@ -272,10 +293,10 @@ func (h *ParameterHandler) GetFees(c *gin.Context) {
 
 	param, err := h.svc.GetParameter(c.Request.Context(), orgID, "fees", name, "global", nil, &product)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "fee parameter not found"})
+		writeError(c, http.StatusNotFound, "PARAMETER_NOT_FOUND", "fee parameter not found", false, nil)
 		return
 	}
-	c.JSON(http.StatusOK, param)
+	writeSuccess(c, http.StatusOK, param)
 }
 
 func (h *ParameterHandler) GetRegulatory(c *gin.Context) {
@@ -283,21 +304,21 @@ func (h *ParameterHandler) GetRegulatory(c *gin.Context) {
 
 	orgIDStr := c.GetHeader("X-Org-ID")
 	if orgIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "X-Org-ID header is required"})
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "X-Org-ID header is required", false, gin.H{"field": "org_id"})
 		return
 	}
 	orgID, err := uuid.Parse(orgIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID format"})
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "invalid org ID format", false, gin.H{"field": "org_id"})
 		return
 	}
 
 	param, err := h.svc.GetParameter(c.Request.Context(), orgID, "regulatory", regType, "global", nil, nil)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "regulatory parameter not found"})
+		writeError(c, http.StatusNotFound, "PARAMETER_NOT_FOUND", "regulatory parameter not found", false, nil)
 		return
 	}
-	c.JSON(http.StatusOK, param)
+	writeSuccess(c, http.StatusOK, param)
 }
 
 func (h *ParameterHandler) CheckRegulatory(c *gin.Context) {
@@ -305,12 +326,12 @@ func (h *ParameterHandler) CheckRegulatory(c *gin.Context) {
 
 	orgIDStr := c.GetHeader("X-Org-ID")
 	if orgIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "X-Org-ID header is required"})
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "X-Org-ID header is required", false, gin.H{"field": "org_id"})
 		return
 	}
 	orgID, err := uuid.Parse(orgIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID format"})
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "invalid org ID format", false, gin.H{"field": "org_id"})
 		return
 	}
 
@@ -318,13 +339,13 @@ func (h *ParameterHandler) CheckRegulatory(c *gin.Context) {
 		Amount float64 `json:"amount"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		writeError(c, http.StatusBadRequest, "INVALID_REQUEST", err.Error(), false, nil)
 		return
 	}
 
 	param, err := h.svc.GetParameter(c.Request.Context(), orgID, "regulatory", regType, "global", nil, nil)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "regulatory threshold not found"})
+		writeError(c, http.StatusNotFound, "PARAMETER_NOT_FOUND", "regulatory threshold not found", false, nil)
 		return
 	}
 
@@ -332,12 +353,12 @@ func (h *ParameterHandler) CheckRegulatory(c *gin.Context) {
 		Threshold float64 `json:"threshold"`
 	}
 	if err := json.Unmarshal(param.Value, &thresholdData); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse threshold parameter value"})
+		writeError(c, http.StatusUnprocessableEntity, "INVALID_PARAMETER_SHAPE", "failed to parse threshold parameter value", false, nil)
 		return
 	}
 
 	isExceeded := req.Amount > thresholdData.Threshold
-	c.JSON(http.StatusOK, gin.H{
+	writeSuccess(c, http.StatusOK, gin.H{
 		"is_exceeded": isExceeded,
 		"amount":      req.Amount,
 		"threshold":   thresholdData.Threshold,
@@ -347,12 +368,12 @@ func (h *ParameterHandler) CheckRegulatory(c *gin.Context) {
 func (h *ParameterHandler) CheckAuthorizationLimit(c *gin.Context) {
 	orgIDStr := c.GetHeader("X-Org-ID")
 	if orgIDStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "X-Org-ID header is required"})
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "X-Org-ID header is required", false, gin.H{"field": "org_id"})
 		return
 	}
 	orgID, err := uuid.Parse(orgIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid org ID format"})
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "invalid org ID format", false, gin.H{"field": "org_id"})
 		return
 	}
 
@@ -361,7 +382,11 @@ func (h *ParameterHandler) CheckAuthorizationLimit(c *gin.Context) {
 		Amount float64 `json:"amount"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		writeError(c, http.StatusBadRequest, "INVALID_REQUEST", err.Error(), false, nil)
+		return
+	}
+	if strings.TrimSpace(req.RoleID) == "" {
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "role_id is required", false, gin.H{"field": "role_id"})
 		return
 	}
 
@@ -369,7 +394,7 @@ func (h *ParameterHandler) CheckAuthorizationLimit(c *gin.Context) {
 	if err != nil {
 		param, err = h.svc.GetParameter(c.Request.Context(), orgID, "authorization_limit", "max_amount", "global", nil, nil)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "authorization limit not found"})
+			writeError(c, http.StatusNotFound, "PARAMETER_NOT_FOUND", "authorization limit not found", false, nil)
 			return
 		}
 	}
@@ -378,12 +403,12 @@ func (h *ParameterHandler) CheckAuthorizationLimit(c *gin.Context) {
 		Limit float64 `json:"limit"`
 	}
 	if err := json.Unmarshal(param.Value, &limitData); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to parse limit parameter value"})
+		writeError(c, http.StatusUnprocessableEntity, "INVALID_PARAMETER_SHAPE", "failed to parse limit parameter value", false, nil)
 		return
 	}
 
 	isAuthorized := req.Amount <= limitData.Limit
-	c.JSON(http.StatusOK, gin.H{
+	writeSuccess(c, http.StatusOK, gin.H{
 		"is_authorized":  isAuthorized,
 		"amount":         req.Amount,
 		"limit":          limitData.Limit,

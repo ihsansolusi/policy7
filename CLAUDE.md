@@ -228,6 +228,49 @@ policy7:uuid-bjbs:rate:deposito_12m:product:deposito:null
 
 ---
 
+## Session Handoff Status (Updated: 2026-05-13)
+
+### Plan 12 / Plan 13 Stream S2 Progress
+
+- **Plan 12 W1-W5** untuk stream `policy7` sudah dieksekusi dan issue terkait sudah ditutup:
+  - W1: `#58 #59 #60` (spec/plan authority lock)
+  - W2: `#61 #62 #63` (contract definition)
+  - W3: `#64 #65 #66` (runtime contract/error/audit implementation)
+  - W4: `#67 #68 #69` (compatibility/deprecation/ABAC conformance register)
+  - W5: `#70` (cross-module conformance audit; recommendation: **NOT READY** untuk retire legacy compatibility paths)
+- **Plan 13 W2**: `policy7#71` selesai dan ditutup.
+
+### Kontrak & Guardrail yang Sudah Terkunci
+
+- `policy7` tetap **single source of truth** untuk policy/parameter.
+- Tidak ada ownership permission/role/session pindah ke `policy7` (tetap domain `auth7`).
+- Policy Management `bos7-enterprise` diarahkan ke `policy7 /admin/v1/*` (API owner + data owner: `policy7`).
+- Error envelope facade sudah distandardkan (`code`, `message`, `http_status`, `retryable`, `details`, `trace_id`).
+
+### File Artefak Penting (Plan 12/13)
+
+- `docs/plans/PLAN-12-WAVE-1-STREAM-POLICY7-EXECUTION.md`
+- `docs/plans/PLAN-12-WAVE-2-STREAM-POLICY7-EXECUTION.md`
+- `docs/plans/PLAN-12-WAVE-3-STREAM-POLICY7-EXECUTION.md`
+- `docs/plans/PLAN-12-WAVE-4-STREAM-POLICY7-EXECUTION.md`
+- `docs/plans/PLAN-12-WAVE-5-STREAM-POLICY7-CONFORMANCE-AUDIT.md`
+- `docs/plans/PLAN-07-ENTERPRISE-ADMIN-UI-INTEGRATION.md`
+- `docs/specs/02-api-detail.md`
+- Runtime contract implementation:
+  - `internal/api/contract_handler.go`
+  - `internal/api/response.go`
+  - `internal/api/router.go`
+  - `internal/api/admin_handler.go`
+  - `internal/api/parameter_handler.go`
+
+### Open Risks / Next Focus
+
+- Legacy compatibility paths (`/v1/params/rates/:product`, `/v1/params/fees/:product`) masih aktif sebagai `compatibility-only`.
+- Belum ada telemetry usage endpoint-level untuk keputusan retirement yang aman.
+- Sinkronisasi final canonical role identifier (`role_id` vs `role_code`) masih dependency lintas stream dengan S1 (`auth7`).
+
+---
+
 ## Status & Timeline
 
 ### Current Status (2026-04-27)
