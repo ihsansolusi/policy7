@@ -1,6 +1,6 @@
 .PHONY: setup db-up db-down migrate-up migrate-down run test
 
-DB_URL ?= postgres://policy7:policy7secret@localhost:5436/policy7?sslmode=disable
+DB_URL ?= postgres://policy7:policy7secret@localhost:5432/policy7?sslmode=disable
 
 setup:
 	go mod tidy
