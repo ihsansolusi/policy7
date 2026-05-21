@@ -11,8 +11,11 @@ import (
 )
 
 // serviceKeyValidator returns a constant-time matcher against SERVICE_KEY env.
-// Empty env disables the bypass (all requests must use bearer token).
+// Empty env or X_SERVICE_KEY_DISABLED=true disables the bypass (all requests must use bearer token).
 func serviceKeyValidator() func(string) bool {
+	if os.Getenv("X_SERVICE_KEY_DISABLED") == "true" {
+		return func(string) bool { return false }
+	}
 	configured := os.Getenv("SERVICE_KEY")
 	if configured == "" {
 		return func(string) bool { return false }

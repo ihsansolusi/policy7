@@ -46,9 +46,13 @@ func TestClient_ValidateTransactionLimit(t *testing.T) {
 
 	client := NewClient(server.URL, "test", "test-key")
 
+	roleID := "teller"
+	product := "transfer"
 	req := ValidationRequest{
-		Name:   "teller_transfer_max",
-		Amount: 50,
+		Name:    "teller_transfer_max",
+		Amount:  50,
+		RoleID:  &roleID,
+		Product: &product,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)

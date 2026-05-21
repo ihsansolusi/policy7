@@ -46,6 +46,18 @@ func (c *Client) do(ctx context.Context, method, path, orgID string, body interf
 	return c.httpClient.Do(req)
 }
 
+// decodeEnvelope decodes a {"success": true, "data": ...} response envelope into out.
+func decodeEnvelope[T any](resp *http.Response, out *T) error {
+	var env struct {
+		Data T `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
+		return err
+	}
+	*out = env.Data
+	return nil
+}
+
 // ValidateTransactionLimit checks an amount against the effective transaction limit.
 func (c *Client) ValidateTransactionLimit(ctx context.Context, orgID string, req ValidationRequest) (*ValidationResponse, error) {
 	resp, err := c.do(ctx, http.MethodPost, "/v1/params/transaction_limit/validate", orgID, req)
@@ -59,7 +71,7 @@ func (c *Client) ValidateTransactionLimit(ctx context.Context, orgID string, req
 	}
 
 	var valResp ValidationResponse
-	if err := json.NewDecoder(resp.Body).Decode(&valResp); err != nil {
+	if err := decodeEnvelope(resp, &valResp); err != nil {
 		return nil, err
 	}
 	return &valResp, nil
@@ -78,7 +90,7 @@ func (c *Client) GetEffectiveParameter(ctx context.Context, orgID, category, nam
 	}
 
 	var param Parameter
-	if err := json.NewDecoder(resp.Body).Decode(&param); err != nil {
+	if err := decodeEnvelope(resp, &param); err != nil {
 		return nil, err
 	}
 	return &param, nil
@@ -97,7 +109,7 @@ func (c *Client) CheckRegulatoryThreshold(ctx context.Context, orgID, regType st
 	}
 
 	var regResp RegulatoryResponse
-	if err := json.NewDecoder(resp.Body).Decode(&regResp); err != nil {
+	if err := decodeEnvelope(resp, &regResp); err != nil {
 		return nil, err
 	}
 	return &regResp, nil
@@ -116,7 +128,7 @@ func (c *Client) CheckAuthorizationLimit(ctx context.Context, orgID string, req 
 	}
 
 	var authResp AuthorizationResponse
-	if err := json.NewDecoder(resp.Body).Decode(&authResp); err != nil {
+	if err := decodeEnvelope(resp, &authResp); err != nil {
 		return nil, err
 	}
 	return &authResp, nil
