@@ -1,0 +1,3 @@
+.env.seed
+seed_001_categories.sql
+seed_002_parameters.sql
