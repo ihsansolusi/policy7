@@ -45,4 +45,10 @@ echo "→ Running migrations..."
 migrate -path migrations -database "$DATABASE_URL" -verbose up
 echo "→ Migrations done."
 
+if [ -n "$DATABASE_URL" ] && [ -f scripts/seed-data.sql ]; then
+  echo "→ Seeding initial data..."
+  psql "${DATABASE_URL}" -f scripts/seed-data.sql 2>&1 || true
+  echo "→ Seed done."
+fi
+
 exec ./policy7
