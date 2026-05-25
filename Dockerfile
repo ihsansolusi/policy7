@@ -31,7 +31,7 @@ WORKDIR /app
 
 COPY --from=builder /app/bin/policy7 .
 COPY migrations/ migrations/
-COPY scripts/docker-entrypoint.sh scripts/docker-entrypoint.sh
+COPY scripts/ scripts/
 
 RUN apk --no-cache add ca-certificates postgresql-client curl && \
     chmod +x scripts/docker-entrypoint.sh && \
