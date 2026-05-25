@@ -2,7 +2,6 @@
 -- PostgreSQL database dump
 --
 
-\restrict 2QghDE4oeQyLaW9PRhaYUVQhkeaYniTaT6BSl4s86TXR5lGXu5qPHB4bdfqv2hw
 
 -- Dumped from database version 16.13
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -98,5 +97,4 @@ INSERT INTO public.parameters VALUES ('dc0001a0-5eed-4000-a000-000000000001', '0
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 2QghDE4oeQyLaW9PRhaYUVQhkeaYniTaT6BSl4s86TXR5lGXu5qPHB4bdfqv2hw
 
