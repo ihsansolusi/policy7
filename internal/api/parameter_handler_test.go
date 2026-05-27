@@ -38,7 +38,7 @@ func TestGetParameter(t *testing.T) {
 	adminSvc := service.NewAdminParameterService(db, nil, nil)
 
 	r := gin.Default()
-	SetupRoutes(r, svc, adminSvc, nil, zerolog.Nop())
+	SetupRoutes(r, svc, adminSvc, nil, zerolog.Nop(), nil, nil)
 
 	req, _ := http.NewRequest(http.MethodGet, "/v1/params/transaction_limit/teller_transfer_max", nil)
 	// Add required header
@@ -68,7 +68,7 @@ func TestValidateTransactionLimit(t *testing.T) {
 	adminSvc := service.NewAdminParameterService(db, nil, nil)
 
 	r := gin.Default()
-	SetupRoutes(r, svc, adminSvc, nil, zerolog.Nop())
+	SetupRoutes(r, svc, adminSvc, nil, zerolog.Nop(), nil, nil)
 
 	roleID := "teller"
 	product := "transfer"

@@ -2,17 +2,23 @@ package main
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/ihsansolusi/lib7-service-go/logging"
+	"github.com/ihsansolusi/lib7-service-go/metrics"
 	"github.com/ihsansolusi/lib7-service-go/token"
+	"github.com/ihsansolusi/lib7-service-go/tracing"
 	"github.com/ihsansolusi/policy7/internal/api"
 	"github.com/ihsansolusi/policy7/internal/service"
 	"github.com/ihsansolusi/policy7/internal/store"
 	"github.com/joho/godotenv"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func main() {
@@ -103,11 +109,48 @@ func main() {
 		tokenMaker = jwtMaker
 	}
 
-	// Initialize Gin router
-	r := gin.Default()
+	// Initialize OTel tracer provider.
+	// When OTEL_EXPORTER_OTLP_ENDPOINT is unset the global provider remains a
+	// no-op, so otel.Tracer returns a no-op tracer — no export, no overhead.
+	var otelTracer trace.Tracer
+	if endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"); endpoint != "" {
+		shutdownTracer, err := tracing.InitTracer(ctx, tracing.Options{
+			ServiceName:  "policy7",
+			OTLPEndpoint: endpoint,
+			Sampling:     1.0,
+		})
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to init tracer")
+		}
+		defer shutdownTracer()
+		log.Info().Str("endpoint", endpoint).Msg("OTel tracer initialized")
+	}
+	otelTracer = otel.Tracer("policy7")
 
-	// Setup routes
-	api.SetupRoutes(r, paramSvc, adminSvc, tokenMaker, log)
+	// Initialize Prometheus metrics registry.
+	metricsReg := metrics.New("policy7")
+
+	// Expose /metrics on a separate port (default :9090).
+	// This keeps the scrape endpoint off the main service port so it is not
+	// accidentally exposed through the API gateway.
+	go func() {
+		mux := http.NewServeMux()
+		mux.Handle("/metrics", promhttp.HandlerFor(metricsReg.Prometheus(), promhttp.HandlerOpts{}))
+		metricsPort := os.Getenv("METRICS_PORT")
+		if metricsPort == "" {
+			metricsPort = "9090"
+		}
+		log.Info().Msgf("Starting metrics server on port %s", metricsPort)
+		if err := http.ListenAndServe(":"+metricsPort, mux); err != nil {
+			log.Error().Err(err).Msg("metrics server stopped")
+		}
+	}()
+
+	// Initialize Gin router with explicit middleware (no gin.Default built-ins).
+	r := gin.New()
+
+	// Setup routes (attaches global middleware + all route groups)
+	api.SetupRoutes(r, paramSvc, adminSvc, tokenMaker, log, otelTracer, metricsReg)
 
 	// Start server
 	log.Info().Msgf("Starting policy7 server on port %s", port)

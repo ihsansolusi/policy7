@@ -5,11 +5,13 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
+	"github.com/ihsansolusi/lib7-service-go/metrics"
 	"github.com/ihsansolusi/lib7-service-go/middleware"
 	"github.com/ihsansolusi/lib7-service-go/token"
 	"github.com/ihsansolusi/policy7/internal/service"
 	"github.com/rs/zerolog"
-	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 )
 
 // serviceKeyValidator returns a constant-time matcher against SERVICE_KEY env.
@@ -28,9 +30,34 @@ func serviceKeyValidator() func(string) bool {
 	}
 }
 
-// SetupRoutes configures all the routes for the application
-func SetupRoutes(r *gin.Engine, svc *service.ParameterService, adminSvc *service.AdminParameterService, tokenMaker token.Maker, logger zerolog.Logger) {
-	tracer := otel.Tracer("policy7")
+// SetupRoutes configures the global middleware stack and all application routes.
+//
+// Middleware order: RequestID → Recovery → RequestSizeLimit → RequestLogger → Tracing → Metrics
+// tracer and metricsReg may be nil (middleware is skipped when nil — useful in tests).
+func SetupRoutes(
+	r *gin.Engine,
+	svc *service.ParameterService,
+	adminSvc *service.AdminParameterService,
+	tokenMaker token.Maker,
+	logger zerolog.Logger,
+	tracer trace.Tracer,
+	metricsReg *metrics.Registry,
+) {
+	// Normalize nil tracer to noop so handler constructors always get a valid tracer.
+	if tracer == nil {
+		tracer = noop.NewTracerProvider().Tracer("policy7")
+	}
+
+	// Global middleware stack (service7-template spec §3.1 order)
+	r.Use(middleware.RequestID())
+	r.Use(middleware.Recovery(logger))
+	r.Use(middleware.RequestSizeLimit(1 << 20)) // 1 MB max body
+	r.Use(middleware.RequestLogger(logger))
+	r.Use(middleware.Tracing(tracer))
+	if metricsReg != nil {
+		r.Use(middleware.Metrics(metricsReg))
+	}
+	// No SecurityHeaders/CORS — policy7 is an internal-only service.
 
 	// Health check (no auth)
 	r.GET("/health", func(c *gin.Context) {
