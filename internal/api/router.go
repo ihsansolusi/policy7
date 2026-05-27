@@ -45,6 +45,7 @@ func SetupRoutes(r *gin.Engine, svc *service.ParameterService, adminSvc *service
 
 	v1 := r.Group("/v1")
 	v1.Use(authMW)
+	v1.Use(middleware.RequireDelegatedOrM2M())
 	{
 		// Basic REST API for parameters
 		v1.GET("/params/:category/:name", handler.GetParameter)
@@ -67,6 +68,7 @@ func SetupRoutes(r *gin.Engine, svc *service.ParameterService, adminSvc *service
 
 	adminV1 := r.Group("/admin/v1")
 	adminV1.Use(authMW)
+	adminV1.Use(middleware.RequireDelegatedOrM2M())
 	{
 		adminV1.GET("/params", adminHandler.List)
 		adminV1.GET("/params/:id", adminHandler.GetByID)
