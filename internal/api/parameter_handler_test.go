@@ -5,14 +5,15 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"os"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/ihsansolusi/policy7/internal/service"
 	"github.com/ihsansolusi/policy7/internal/store"
+	"github.com/rs/zerolog"
 )
 
 // mockQuerier implements store.Querier for testing
@@ -37,7 +38,7 @@ func TestGetParameter(t *testing.T) {
 	adminSvc := service.NewAdminParameterService(db, nil, nil)
 
 	r := gin.Default()
-	SetupRoutes(r, svc, adminSvc, nil)
+	SetupRoutes(r, svc, adminSvc, nil, zerolog.Nop())
 
 	req, _ := http.NewRequest(http.MethodGet, "/v1/params/transaction_limit/teller_transfer_max", nil)
 	// Add required header
@@ -67,7 +68,7 @@ func TestValidateTransactionLimit(t *testing.T) {
 	adminSvc := service.NewAdminParameterService(db, nil, nil)
 
 	r := gin.Default()
-	SetupRoutes(r, svc, adminSvc, nil)
+	SetupRoutes(r, svc, adminSvc, nil, zerolog.Nop())
 
 	roleID := "teller"
 	product := "transfer"

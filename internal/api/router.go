@@ -8,6 +8,8 @@ import (
 	"github.com/ihsansolusi/lib7-service-go/middleware"
 	"github.com/ihsansolusi/lib7-service-go/token"
 	"github.com/ihsansolusi/policy7/internal/service"
+	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel"
 )
 
 // serviceKeyValidator returns a constant-time matcher against SERVICE_KEY env.
@@ -27,7 +29,9 @@ func serviceKeyValidator() func(string) bool {
 }
 
 // SetupRoutes configures all the routes for the application
-func SetupRoutes(r *gin.Engine, svc *service.ParameterService, adminSvc *service.AdminParameterService, tokenMaker token.Maker) {
+func SetupRoutes(r *gin.Engine, svc *service.ParameterService, adminSvc *service.AdminParameterService, tokenMaker token.Maker, logger zerolog.Logger) {
+	tracer := otel.Tracer("policy7")
+
 	// Health check (no auth)
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{
@@ -35,9 +39,9 @@ func SetupRoutes(r *gin.Engine, svc *service.ParameterService, adminSvc *service
 		})
 	})
 
-	handler := NewParameterHandler(svc)
-	adminHandler := NewAdminHandler(adminSvc)
-	contractHandler := NewContractHandler()
+	handler := NewParameterHandler(svc, tracer, logger)
+	adminHandler := NewAdminHandler(adminSvc, tracer, logger)
+	contractHandler := NewContractHandler(tracer, logger)
 
 	// Auth middleware applied to all /v1 and /admin/v1 endpoints:
 	// bearer JWT (auth7-issued) OR X-Service-Key (BFF/M2M bypass).
@@ -74,6 +78,7 @@ func SetupRoutes(r *gin.Engine, svc *service.ParameterService, adminSvc *service
 		adminV1.GET("/params/:id", adminHandler.GetByID)
 		adminV1.POST("/params", adminHandler.Create)
 		adminV1.POST("/params/bulk-import", adminHandler.BulkImport)
+		adminV1.POST("/params/query", adminHandler.ParamsQuery)
 		adminV1.PUT("/params/:id", adminHandler.Update)
 		adminV1.DELETE("/params/:id", adminHandler.Delete)
 		adminV1.GET("/params/:id/history", adminHandler.GetHistory)

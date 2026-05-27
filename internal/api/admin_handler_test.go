@@ -13,7 +13,9 @@ import (
 	"github.com/ihsansolusi/policy7/internal/service"
 	"github.com/ihsansolusi/policy7/internal/store"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
+	"go.opentelemetry.io/otel/trace/noop"
 )
 
 type mockAdminQuerier struct {
@@ -42,7 +44,7 @@ func TestAdminCreateParameter(t *testing.T) {
 	adminSvc := service.NewAdminParameterService(db, nil, nil)
 
 	r := gin.Default()
-	adminHandler := NewAdminHandler(adminSvc)
+	adminHandler := NewAdminHandler(adminSvc, noop.NewTracerProvider().Tracer(""), zerolog.Nop())
 	r.POST("/admin/v1/params", adminHandler.Create)
 
 	reqBody := map[string]interface{}{

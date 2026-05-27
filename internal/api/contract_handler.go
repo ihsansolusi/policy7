@@ -4,15 +4,28 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/ihsansolusi/lib7-service-go/logging"
+	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
-type ContractHandler struct{}
+type ContractHandler struct {
+	tracer trace.Tracer
+	logger zerolog.Logger
+}
 
-func NewContractHandler() *ContractHandler {
-	return &ContractHandler{}
+func NewContractHandler(tracer trace.Tracer, logger zerolog.Logger) *ContractHandler {
+	return &ContractHandler{tracer: tracer, logger: logger}
 }
 
 func (h *ContractHandler) Categories(c *gin.Context) {
+	const op = "rest.ContractHandler.Categories"
+	logger := logging.WithTrace(c.Request.Context(), h.logger)
+	_, span := h.tracer.Start(c.Request.Context(), op)
+	defer span.End()
+	logger.Debug().Str("op", op).Msg("handled")
+	span.SetStatus(codes.Ok, "")
 	writeSuccess(c, http.StatusOK, gin.H{
 		"categories": []gin.H{
 			{"code": "transaction_limit", "requires": []string{"org_id", "role_id|role_code", "product"}},
@@ -27,6 +40,12 @@ func (h *ContractHandler) Categories(c *gin.Context) {
 }
 
 func (h *ContractHandler) CallerContext(c *gin.Context) {
+	const op = "rest.ContractHandler.CallerContext"
+	logger := logging.WithTrace(c.Request.Context(), h.logger)
+	_, span := h.tracer.Start(c.Request.Context(), op)
+	defer span.End()
+	logger.Debug().Str("op", op).Msg("handled")
+	span.SetStatus(codes.Ok, "")
 	writeSuccess(c, http.StatusOK, gin.H{
 		"fields": []gin.H{
 			{"name": "org_id", "required": true, "source": "X-Org-ID/JWT"},
@@ -46,6 +65,12 @@ func (h *ContractHandler) CallerContext(c *gin.Context) {
 }
 
 func (h *ContractHandler) Errors(c *gin.Context) {
+	const op = "rest.ContractHandler.Errors"
+	logger := logging.WithTrace(c.Request.Context(), h.logger)
+	_, span := h.tracer.Start(c.Request.Context(), op)
+	defer span.End()
+	logger.Debug().Str("op", op).Msg("handled")
+	span.SetStatus(codes.Ok, "")
 	writeSuccess(c, http.StatusOK, gin.H{
 		"codes": []gin.H{
 			{"code": "INVALID_CALLER_CONTEXT", "http_status": 400, "retryable": false},

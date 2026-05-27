@@ -13,6 +13,8 @@ import (
 	"github.com/ihsansolusi/policy7/internal/service"
 	"github.com/ihsansolusi/policy7/internal/store"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/trace/noop"
 )
 
 type mockQuerier struct {
@@ -38,7 +40,7 @@ func TestClient_ValidateTransactionLimit(t *testing.T) {
 
 	r := gin.Default()
 	r.Use(middleware.ServiceAuth())
-	handler := api.NewParameterHandler(svc)
+	handler := api.NewParameterHandler(svc, noop.NewTracerProvider().Tracer(""), zerolog.Nop())
 	r.POST("/v1/params/transaction_limit/validate", handler.ValidateTransactionLimit)
 
 	server := httptest.NewServer(r)

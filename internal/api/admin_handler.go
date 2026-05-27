@@ -10,20 +10,49 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/ihsansolusi/lib7-service-go/logging"
+	"github.com/ihsansolusi/lib7-service-go/middleware"
 	"github.com/ihsansolusi/policy7/internal/service"
 	"github.com/ihsansolusi/policy7/internal/store"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
-type AdminHandler struct {
-	svc *service.AdminParameterService
+// DataTableRequest is the cursor-based pagination request body for admin list endpoints.
+type DataTableRequest struct {
+	ReqType    string `json:"req_type"`
+	PageSize   int    `json:"page_size"`
+	TopData    string `json:"top_data"`
+	BottomData string `json:"bottom_data"`
+	SearchText string `json:"search_text"`
+	SortColumn string `json:"sort_column"`
 }
 
-func NewAdminHandler(svc *service.AdminParameterService) *AdminHandler {
-	return &AdminHandler{svc: svc}
+// DataTableResponse wraps cursor-paginated results for the admin DataTable UI.
+type DataTableResponse struct {
+	Data      any  `json:"data"`
+	AllowNext bool `json:"allow_next"`
+	AllowPrev bool `json:"allow_prev"`
+}
+
+type AdminHandler struct {
+	svc    *service.AdminParameterService
+	tracer trace.Tracer
+	logger zerolog.Logger
+}
+
+func NewAdminHandler(svc *service.AdminParameterService, tracer trace.Tracer, logger zerolog.Logger) *AdminHandler {
+	return &AdminHandler{svc: svc, tracer: tracer, logger: logger}
 }
 
 func (h *AdminHandler) List(c *gin.Context) {
+	const op = "rest.AdminHandler.List"
+	logger := logging.WithTrace(c.Request.Context(), h.logger)
+	ctx, span := h.tracer.Start(c.Request.Context(), op)
+	defer span.End()
+
 	orgID, ok := getOrgID(c)
 	if !ok {
 		return
@@ -53,19 +82,27 @@ func (h *AdminHandler) List(c *gin.Context) {
 		err    error
 	)
 	if category == "" && product == "" && appliesTo == "" {
-		params, err = h.svc.List(c.Request.Context(), orgID, limit, offset)
+		params, err = h.svc.List(ctx, orgID, limit, offset)
 	} else {
-		params, err = h.svc.ListFiltered(c.Request.Context(), orgID, category, product, appliesTo, limit, offset)
+		params, err = h.svc.ListFiltered(ctx, orgID, category, product, appliesTo, limit, offset)
 	}
 	if err != nil {
+		span.RecordError(err)
+		logger.Error().Err(err).Str("op", op).Msg("failed")
 		writeError(c, http.StatusInternalServerError, "POLICY_BACKEND_UNAVAILABLE", "failed to list parameters", true, nil)
 		return
 	}
 
+	span.SetStatus(codes.Ok, "")
 	writeSuccess(c, http.StatusOK, params)
 }
 
 func (h *AdminHandler) GetByID(c *gin.Context) {
+	const op = "rest.AdminHandler.GetByID"
+	logger := logging.WithTrace(c.Request.Context(), h.logger)
+	ctx, span := h.tracer.Start(c.Request.Context(), op)
+	defer span.End()
+
 	orgID, ok := getOrgID(c)
 	if !ok {
 		return
@@ -77,16 +114,24 @@ func (h *AdminHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	param, err := h.svc.GetByID(c.Request.Context(), id, orgID)
+	param, err := h.svc.GetByID(ctx, id, orgID)
 	if err != nil {
+		span.RecordError(err)
+		logger.Error().Err(err).Str("op", op).Msg("failed")
 		writeError(c, http.StatusNotFound, "PARAMETER_NOT_FOUND", err.Error(), false, nil)
 		return
 	}
 
+	span.SetStatus(codes.Ok, "")
 	writeSuccess(c, http.StatusOK, param)
 }
 
 func (h *AdminHandler) Create(c *gin.Context) {
+	const op = "rest.AdminHandler.Create"
+	logger := logging.WithTrace(c.Request.Context(), h.logger)
+	ctx, span := h.tracer.Start(c.Request.Context(), op)
+	defer span.End()
+
 	orgID, ok := getOrgID(c)
 	if !ok {
 		return
@@ -140,7 +185,7 @@ func (h *AdminHandler) Create(c *gin.Context) {
 		scope = pgtype.Text{String: *req.Scope, Valid: true}
 	}
 
-	param, err := h.svc.Create(c.Request.Context(), store.CreateParameterParams{
+	param, err := h.svc.Create(ctx, store.CreateParameterParams{
 		OrgID:          pgOrgID,
 		Category:       req.Category,
 		Name:           req.Name,
@@ -159,10 +204,13 @@ func (h *AdminHandler) Create(c *gin.Context) {
 	}, req.ChangeReason)
 
 	if err != nil {
+		span.RecordError(err)
+		logger.Error().Err(err).Str("op", op).Msg("failed")
 		writeError(c, http.StatusInternalServerError, "POLICY_BACKEND_UNAVAILABLE", err.Error(), true, nil)
 		return
 	}
 
+	span.SetStatus(codes.Ok, "")
 	writeSuccess(c, http.StatusCreated, gin.H{
 		"parameter": param,
 		"audit": gin.H{
@@ -173,6 +221,11 @@ func (h *AdminHandler) Create(c *gin.Context) {
 }
 
 func (h *AdminHandler) Update(c *gin.Context) {
+	const op = "rest.AdminHandler.Update"
+	logger := logging.WithTrace(c.Request.Context(), h.logger)
+	ctx, span := h.tracer.Start(c.Request.Context(), op)
+	defer span.End()
+
 	orgID, ok := getOrgID(c)
 	if !ok {
 		return
@@ -203,8 +256,10 @@ func (h *AdminHandler) Update(c *gin.Context) {
 		return
 	}
 
-	param, err := h.svc.Update(c.Request.Context(), id, orgID, userID, req.Value, req.ChangeReason)
+	param, err := h.svc.Update(ctx, id, orgID, userID, req.Value, req.ChangeReason)
 	if err != nil {
+		span.RecordError(err)
+		logger.Error().Err(err).Str("op", op).Msg("failed")
 		if strings.Contains(err.Error(), "inactive parameter") {
 			writeError(c, http.StatusConflict, "POLICY_CONFLICT", err.Error(), false, nil)
 			return
@@ -213,6 +268,7 @@ func (h *AdminHandler) Update(c *gin.Context) {
 		return
 	}
 
+	span.SetStatus(codes.Ok, "")
 	writeSuccess(c, http.StatusOK, gin.H{
 		"parameter": param,
 		"audit": gin.H{
@@ -223,6 +279,11 @@ func (h *AdminHandler) Update(c *gin.Context) {
 }
 
 func (h *AdminHandler) Delete(c *gin.Context) {
+	const op = "rest.AdminHandler.Delete"
+	logger := logging.WithTrace(c.Request.Context(), h.logger)
+	ctx, span := h.tracer.Start(c.Request.Context(), op)
+	defer span.End()
+
 	orgID, ok := getOrgID(c)
 	if !ok {
 		return
@@ -252,16 +313,24 @@ func (h *AdminHandler) Delete(c *gin.Context) {
 		return
 	}
 
-	err = h.svc.Delete(c.Request.Context(), id, orgID, userID, req.ChangeReason)
+	err = h.svc.Delete(ctx, id, orgID, userID, req.ChangeReason)
 	if err != nil {
+		span.RecordError(err)
+		logger.Error().Err(err).Str("op", op).Msg("failed")
 		writeError(c, http.StatusInternalServerError, "POLICY_BACKEND_UNAVAILABLE", err.Error(), true, nil)
 		return
 	}
 
+	span.SetStatus(codes.Ok, "")
 	writeNoContent(c)
 }
 
 func (h *AdminHandler) GetHistory(c *gin.Context) {
+	const op = "rest.AdminHandler.GetHistory"
+	logger := logging.WithTrace(c.Request.Context(), h.logger)
+	ctx, span := h.tracer.Start(c.Request.Context(), op)
+	defer span.End()
+
 	orgID, ok := getOrgID(c)
 	if !ok {
 		return
@@ -273,16 +342,24 @@ func (h *AdminHandler) GetHistory(c *gin.Context) {
 		return
 	}
 
-	histories, err := h.svc.GetHistory(c.Request.Context(), id, orgID)
+	histories, err := h.svc.GetHistory(ctx, id, orgID)
 	if err != nil {
+		span.RecordError(err)
+		logger.Error().Err(err).Str("op", op).Msg("failed")
 		writeError(c, http.StatusInternalServerError, "POLICY_BACKEND_UNAVAILABLE", err.Error(), true, nil)
 		return
 	}
 
+	span.SetStatus(codes.Ok, "")
 	writeSuccess(c, http.StatusOK, histories)
 }
 
 func (h *AdminHandler) BulkImport(c *gin.Context) {
+	const op = "rest.AdminHandler.BulkImport"
+	logger := logging.WithTrace(c.Request.Context(), h.logger)
+	ctx, span := h.tracer.Start(c.Request.Context(), op)
+	defer span.End()
+
 	orgID, ok := getOrgID(c)
 	if !ok {
 		return
@@ -341,18 +418,65 @@ func (h *AdminHandler) BulkImport(c *gin.Context) {
 		})
 	}
 
-	count, err := h.svc.BulkImport(c.Request.Context(), orgID, userID, paramsToCreate)
+	count, err := h.svc.BulkImport(ctx, orgID, userID, paramsToCreate)
 	if err != nil {
+		span.RecordError(err)
+		logger.Error().Err(err).Str("op", op).Msg("failed")
 		writeError(c, http.StatusInternalServerError, "POLICY_BACKEND_UNAVAILABLE", err.Error(), true, nil)
 		return
 	}
 
+	span.SetStatus(codes.Ok, "")
 	writeSuccess(c, http.StatusOK, gin.H{
 		"message": "bulk import completed",
 		"summary": gin.H{
 			"success_count": count,
 			"total_count":   len(req),
 		},
+	})
+}
+
+// ParamsQuery handles POST /admin/v1/params/query — DataTable cursor-based pagination.
+func (h *AdminHandler) ParamsQuery(c *gin.Context) {
+	const op = "rest.AdminHandler.ParamsQuery"
+	logger := logging.WithTrace(c.Request.Context(), h.logger)
+	ctx, span := h.tracer.Start(c.Request.Context(), op)
+	defer span.End()
+
+	orgID, ok := getOrgID(c)
+	if !ok {
+		return
+	}
+
+	var req DataTableRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		span.RecordError(err)
+		writeError(c, http.StatusBadRequest, "INVALID_REQUEST", err.Error(), false, nil)
+		return
+	}
+
+	payload := middleware.MustGetPayload(c)
+	result, err := h.svc.ListParamsCursor(ctx, service.CursorParams{
+		OrgID:      orgID,
+		BranchID:   payload.BranchID,
+		ReqType:    req.ReqType,
+		PageSize:   req.PageSize,
+		TopData:    req.TopData,
+		BottomData: req.BottomData,
+		Search:     req.SearchText,
+	})
+	if err != nil {
+		span.RecordError(err)
+		logger.Error().Err(err).Str("op", op).Msg("failed")
+		writeError(c, http.StatusInternalServerError, "POLICY_BACKEND_UNAVAILABLE", err.Error(), true, nil)
+		return
+	}
+
+	span.SetStatus(codes.Ok, "")
+	c.JSON(http.StatusOK, DataTableResponse{
+		Data:      result.Data,
+		AllowNext: result.AllowNext,
+		AllowPrev: result.AllowPrev,
 	})
 }
 

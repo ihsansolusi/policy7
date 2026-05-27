@@ -107,7 +107,7 @@ func main() {
 	r := gin.Default()
 
 	// Setup routes
-	api.SetupRoutes(r, paramSvc, adminSvc, tokenMaker)
+	api.SetupRoutes(r, paramSvc, adminSvc, tokenMaker, log)
 
 	// Start server
 	log.Info().Msgf("Starting policy7 server on port %s", port)

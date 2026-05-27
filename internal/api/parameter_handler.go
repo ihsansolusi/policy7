@@ -1,25 +1,36 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/ihsansolusi/lib7-service-go/logging"
 	"github.com/ihsansolusi/policy7/internal/service"
+	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type ParameterHandler struct {
-	svc *service.ParameterService
+	svc    *service.ParameterService
+	tracer trace.Tracer
+	logger zerolog.Logger
 }
 
-func NewParameterHandler(svc *service.ParameterService) *ParameterHandler {
-	return &ParameterHandler{svc: svc}
+func NewParameterHandler(svc *service.ParameterService, tracer trace.Tracer, logger zerolog.Logger) *ParameterHandler {
+	return &ParameterHandler{svc: svc, tracer: tracer, logger: logger}
 }
 
-// GetParameter handles the GET /v1/params/:category/:name endpoint
 func (h *ParameterHandler) GetParameter(c *gin.Context) {
+	const op = "rest.ParameterHandler.GetParameter"
+	logger := logging.WithTrace(c.Request.Context(), h.logger)
+	ctx, span := h.tracer.Start(c.Request.Context(), op)
+	defer span.End()
+
 	category := c.Param("category")
 	name := c.Param("name")
 
@@ -50,16 +61,24 @@ func (h *ParameterHandler) GetParameter(c *gin.Context) {
 		product = &p
 	}
 
-	param, err := h.svc.GetParameter(c.Request.Context(), orgID, category, name, appliesTo, appliesToID, product)
+	param, err := h.svc.GetParameter(ctx, orgID, category, name, appliesTo, appliesToID, product)
 	if err != nil {
+		span.RecordError(err)
+		logger.Error().Err(err).Str("op", op).Msg("failed")
 		writeError(c, http.StatusNotFound, "PARAMETER_NOT_FOUND", "parameter not found", false, nil)
 		return
 	}
 
+	span.SetStatus(codes.Ok, "")
 	writeSuccess(c, http.StatusOK, param)
 }
 
 func (h *ParameterHandler) GetEffectiveParameter(c *gin.Context) {
+	const op = "rest.ParameterHandler.GetEffectiveParameter"
+	logger := logging.WithTrace(c.Request.Context(), h.logger)
+	ctx, span := h.tracer.Start(c.Request.Context(), op)
+	defer span.End()
+
 	category := c.Param("category")
 	name := c.Param("name")
 
@@ -98,16 +117,24 @@ func (h *ParameterHandler) GetEffectiveParameter(c *gin.Context) {
 		Global:   true,
 	}
 
-	param, err := h.svc.GetEffectiveParameter(c.Request.Context(), orgID, category, name, product, resCtx)
+	param, err := h.svc.GetEffectiveParameter(ctx, orgID, category, name, product, resCtx)
 	if err != nil {
+		span.RecordError(err)
+		logger.Error().Err(err).Str("op", op).Msg("failed")
 		writeError(c, http.StatusNotFound, "PARAMETER_NOT_FOUND", "effective parameter not found", false, nil)
 		return
 	}
 
+	span.SetStatus(codes.Ok, "")
 	writeSuccess(c, http.StatusOK, param)
 }
 
 func (h *ParameterHandler) ValidateTransactionLimit(c *gin.Context) {
+	const op = "rest.ParameterHandler.ValidateTransactionLimit"
+	logger := logging.WithTrace(c.Request.Context(), h.logger)
+	ctx, span := h.tracer.Start(c.Request.Context(), op)
+	defer span.End()
+
 	orgIDStr := c.GetHeader("X-Org-ID")
 	if orgIDStr == "" {
 		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "X-Org-ID header is required", false, gin.H{"field": "org_id"})
@@ -151,8 +178,10 @@ func (h *ParameterHandler) ValidateTransactionLimit(c *gin.Context) {
 		Global:   true,
 	}
 
-	param, err := h.svc.GetEffectiveParameter(c.Request.Context(), orgID, "transaction_limit", req.Name, req.Product, resCtx)
+	param, err := h.svc.GetEffectiveParameter(ctx, orgID, "transaction_limit", req.Name, req.Product, resCtx)
 	if err != nil {
+		span.RecordError(err)
+		logger.Error().Err(err).Str("op", op).Msg("failed")
 		writeError(c, http.StatusNotFound, "PARAMETER_NOT_FOUND", "limit parameter not found", false, nil)
 		return
 	}
@@ -161,11 +190,14 @@ func (h *ParameterHandler) ValidateTransactionLimit(c *gin.Context) {
 		Limit float64 `json:"limit"`
 	}
 	if err := json.Unmarshal(param.Value, &limitData); err != nil {
+		span.RecordError(err)
+		logger.Error().Err(err).Str("op", op).Msg("failed to parse limit")
 		writeError(c, http.StatusUnprocessableEntity, "INVALID_PARAMETER_SHAPE", "failed to parse limit parameter value", false, nil)
 		return
 	}
 
 	isValid := req.Amount <= limitData.Limit
+	span.SetStatus(codes.Ok, "")
 	writeSuccess(c, http.StatusOK, gin.H{
 		"is_valid":       isValid,
 		"amount":         req.Amount,
@@ -175,18 +207,33 @@ func (h *ParameterHandler) ValidateTransactionLimit(c *gin.Context) {
 }
 
 func (h *ParameterHandler) GetApprovalThresholds(c *gin.Context) {
-	h.handleCategoryRequest(c, "approval_threshold")
+	const op = "rest.ParameterHandler.GetApprovalThresholds"
+	ctx, span := h.tracer.Start(c.Request.Context(), op)
+	defer span.End()
+	h.handleCategoryRequest(c, ctx, "approval_threshold")
 }
 
 func (h *ParameterHandler) GetOperationalHours(c *gin.Context) {
-	h.handleCategoryRequest(c, "operational_hours")
+	const op = "rest.ParameterHandler.GetOperationalHours"
+	ctx, span := h.tracer.Start(c.Request.Context(), op)
+	defer span.End()
+	h.handleCategoryRequest(c, ctx, "operational_hours")
 }
 
 func (h *ParameterHandler) GetProductAccess(c *gin.Context) {
-	h.handleCategoryRequest(c, "product_access")
+	const op = "rest.ParameterHandler.GetProductAccess"
+	ctx, span := h.tracer.Start(c.Request.Context(), op)
+	defer span.End()
+	h.handleCategoryRequest(c, ctx, "product_access")
 }
 
-func (h *ParameterHandler) handleCategoryRequest(c *gin.Context, category string) {
+// handleCategoryRequest is a shared helper for category-specific GET endpoints.
+// The caller creates the root span; this function records errors and sets status on it.
+func (h *ParameterHandler) handleCategoryRequest(c *gin.Context, ctx context.Context, category string) {
+	const op = "rest.ParameterHandler.handleCategoryRequest"
+	span := trace.SpanFromContext(ctx)
+	logger := logging.WithTrace(ctx, h.logger)
+
 	name := c.Query("name")
 	if name == "" {
 		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "name query parameter is required", false, gin.H{"field": "name"})
@@ -236,16 +283,24 @@ func (h *ParameterHandler) handleCategoryRequest(c *gin.Context, category string
 		Global:   true,
 	}
 
-	param, err := h.svc.GetEffectiveParameter(c.Request.Context(), orgID, category, name, product, resCtx)
+	param, err := h.svc.GetEffectiveParameter(ctx, orgID, category, name, product, resCtx)
 	if err != nil {
+		span.RecordError(err)
+		logger.Error().Err(err).Str("op", op).Msg("failed")
 		writeError(c, http.StatusNotFound, "PARAMETER_NOT_FOUND", "effective parameter not found", false, nil)
 		return
 	}
 
+	span.SetStatus(codes.Ok, "")
 	writeSuccess(c, http.StatusOK, param)
 }
 
 func (h *ParameterHandler) GetRates(c *gin.Context) {
+	const op = "rest.ParameterHandler.GetRates"
+	logger := logging.WithTrace(c.Request.Context(), h.logger)
+	ctx, span := h.tracer.Start(c.Request.Context(), op)
+	defer span.End()
+
 	product := c.Param("product")
 
 	orgIDStr := c.GetHeader("X-Org-ID")
@@ -264,15 +319,23 @@ func (h *ParameterHandler) GetRates(c *gin.Context) {
 		name = "interest_rate"
 	}
 
-	param, err := h.svc.GetParameter(c.Request.Context(), orgID, "rates", name, "global", nil, &product)
+	param, err := h.svc.GetParameter(ctx, orgID, "rates", name, "global", nil, &product)
 	if err != nil {
+		span.RecordError(err)
+		logger.Error().Err(err).Str("op", op).Msg("failed")
 		writeError(c, http.StatusNotFound, "PARAMETER_NOT_FOUND", "rate parameter not found", false, nil)
 		return
 	}
+	span.SetStatus(codes.Ok, "")
 	writeSuccess(c, http.StatusOK, param)
 }
 
 func (h *ParameterHandler) GetFees(c *gin.Context) {
+	const op = "rest.ParameterHandler.GetFees"
+	logger := logging.WithTrace(c.Request.Context(), h.logger)
+	ctx, span := h.tracer.Start(c.Request.Context(), op)
+	defer span.End()
+
 	product := c.Param("product")
 
 	orgIDStr := c.GetHeader("X-Org-ID")
@@ -291,15 +354,23 @@ func (h *ParameterHandler) GetFees(c *gin.Context) {
 		name = "admin_fee"
 	}
 
-	param, err := h.svc.GetParameter(c.Request.Context(), orgID, "fees", name, "global", nil, &product)
+	param, err := h.svc.GetParameter(ctx, orgID, "fees", name, "global", nil, &product)
 	if err != nil {
+		span.RecordError(err)
+		logger.Error().Err(err).Str("op", op).Msg("failed")
 		writeError(c, http.StatusNotFound, "PARAMETER_NOT_FOUND", "fee parameter not found", false, nil)
 		return
 	}
+	span.SetStatus(codes.Ok, "")
 	writeSuccess(c, http.StatusOK, param)
 }
 
 func (h *ParameterHandler) GetRegulatory(c *gin.Context) {
+	const op = "rest.ParameterHandler.GetRegulatory"
+	logger := logging.WithTrace(c.Request.Context(), h.logger)
+	ctx, span := h.tracer.Start(c.Request.Context(), op)
+	defer span.End()
+
 	regType := c.Param("type")
 
 	orgIDStr := c.GetHeader("X-Org-ID")
@@ -313,15 +384,23 @@ func (h *ParameterHandler) GetRegulatory(c *gin.Context) {
 		return
 	}
 
-	param, err := h.svc.GetParameter(c.Request.Context(), orgID, "regulatory", regType, "global", nil, nil)
+	param, err := h.svc.GetParameter(ctx, orgID, "regulatory", regType, "global", nil, nil)
 	if err != nil {
+		span.RecordError(err)
+		logger.Error().Err(err).Str("op", op).Msg("failed")
 		writeError(c, http.StatusNotFound, "PARAMETER_NOT_FOUND", "regulatory parameter not found", false, nil)
 		return
 	}
+	span.SetStatus(codes.Ok, "")
 	writeSuccess(c, http.StatusOK, param)
 }
 
 func (h *ParameterHandler) CheckRegulatory(c *gin.Context) {
+	const op = "rest.ParameterHandler.CheckRegulatory"
+	logger := logging.WithTrace(c.Request.Context(), h.logger)
+	ctx, span := h.tracer.Start(c.Request.Context(), op)
+	defer span.End()
+
 	regType := c.Param("type")
 
 	orgIDStr := c.GetHeader("X-Org-ID")
@@ -343,8 +422,10 @@ func (h *ParameterHandler) CheckRegulatory(c *gin.Context) {
 		return
 	}
 
-	param, err := h.svc.GetParameter(c.Request.Context(), orgID, "regulatory", regType, "global", nil, nil)
+	param, err := h.svc.GetParameter(ctx, orgID, "regulatory", regType, "global", nil, nil)
 	if err != nil {
+		span.RecordError(err)
+		logger.Error().Err(err).Str("op", op).Msg("failed")
 		writeError(c, http.StatusNotFound, "PARAMETER_NOT_FOUND", "regulatory threshold not found", false, nil)
 		return
 	}
@@ -353,11 +434,14 @@ func (h *ParameterHandler) CheckRegulatory(c *gin.Context) {
 		Threshold float64 `json:"threshold"`
 	}
 	if err := json.Unmarshal(param.Value, &thresholdData); err != nil {
+		span.RecordError(err)
+		logger.Error().Err(err).Str("op", op).Msg("failed to parse threshold")
 		writeError(c, http.StatusUnprocessableEntity, "INVALID_PARAMETER_SHAPE", "failed to parse threshold parameter value", false, nil)
 		return
 	}
 
 	isExceeded := req.Amount > thresholdData.Threshold
+	span.SetStatus(codes.Ok, "")
 	writeSuccess(c, http.StatusOK, gin.H{
 		"is_exceeded": isExceeded,
 		"amount":      req.Amount,
@@ -366,6 +450,11 @@ func (h *ParameterHandler) CheckRegulatory(c *gin.Context) {
 }
 
 func (h *ParameterHandler) CheckAuthorizationLimit(c *gin.Context) {
+	const op = "rest.ParameterHandler.CheckAuthorizationLimit"
+	logger := logging.WithTrace(c.Request.Context(), h.logger)
+	ctx, span := h.tracer.Start(c.Request.Context(), op)
+	defer span.End()
+
 	orgIDStr := c.GetHeader("X-Org-ID")
 	if orgIDStr == "" {
 		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "X-Org-ID header is required", false, gin.H{"field": "org_id"})
@@ -390,10 +479,12 @@ func (h *ParameterHandler) CheckAuthorizationLimit(c *gin.Context) {
 		return
 	}
 
-	param, err := h.svc.GetParameter(c.Request.Context(), orgID, "authorization_limit", "max_amount", "role", &req.RoleID, nil)
+	param, err := h.svc.GetParameter(ctx, orgID, "authorization_limit", "max_amount", "role", &req.RoleID, nil)
 	if err != nil {
-		param, err = h.svc.GetParameter(c.Request.Context(), orgID, "authorization_limit", "max_amount", "global", nil, nil)
+		param, err = h.svc.GetParameter(ctx, orgID, "authorization_limit", "max_amount", "global", nil, nil)
 		if err != nil {
+			span.RecordError(err)
+			logger.Error().Err(err).Str("op", op).Msg("failed")
 			writeError(c, http.StatusNotFound, "PARAMETER_NOT_FOUND", "authorization limit not found", false, nil)
 			return
 		}
@@ -403,11 +494,14 @@ func (h *ParameterHandler) CheckAuthorizationLimit(c *gin.Context) {
 		Limit float64 `json:"limit"`
 	}
 	if err := json.Unmarshal(param.Value, &limitData); err != nil {
+		span.RecordError(err)
+		logger.Error().Err(err).Str("op", op).Msg("failed to parse limit")
 		writeError(c, http.StatusUnprocessableEntity, "INVALID_PARAMETER_SHAPE", "failed to parse limit parameter value", false, nil)
 		return
 	}
 
 	isAuthorized := req.Amount <= limitData.Limit
+	span.SetStatus(codes.Ok, "")
 	writeSuccess(c, http.StatusOK, gin.H{
 		"is_authorized":  isAuthorized,
 		"amount":         req.Amount,

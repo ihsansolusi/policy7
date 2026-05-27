@@ -250,6 +250,30 @@ func (s *AdminParameterService) GetHistory(ctx context.Context, id uuid.UUID, or
 	return histories, nil
 }
 
+// CursorParams carries request fields for DataTable cursor-based pagination.
+type CursorParams struct {
+	OrgID      uuid.UUID
+	BranchID   uuid.UUID
+	ReqType    string
+	PageSize   int
+	TopData    string
+	BottomData string
+	Search     string
+}
+
+// CursorResult is the DataTable cursor pagination response.
+type CursorResult struct {
+	Data      []store.Parameter
+	AllowNext bool
+	AllowPrev bool
+}
+
+func (s *AdminParameterService) ListParamsCursor(ctx context.Context, params CursorParams) (*CursorResult, error) {
+	const op = "service.AdminParameterService.ListParamsCursor"
+	_ = op
+	return &CursorResult{Data: []store.Parameter{}, AllowNext: false, AllowPrev: false}, nil
+}
+
 func (s *AdminParameterService) BulkImport(ctx context.Context, orgID, userID uuid.UUID, params []store.CreateParameterParams) (int, error) {
 	successCount := 0
 	for _, p := range params {
