@@ -36,7 +36,7 @@ func TestClient_ValidateTransactionLimit(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := &mockQuerier{}
-	svc := service.NewParameterService(db, nil)
+	svc := service.NewParameterService(db, nil, nil)
 
 	r := gin.Default()
 	r.Use(middleware.ServiceAuth())

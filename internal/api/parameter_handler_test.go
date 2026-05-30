@@ -34,7 +34,7 @@ func TestGetParameter(t *testing.T) {
 
 	// Setup service with mock DB and nil cache
 	db := &mockQuerier{}
-	svc := service.NewParameterService(db, nil)
+	svc := service.NewParameterService(db, nil, nil)
 	adminSvc := service.NewAdminParameterService(db, nil, nil)
 
 	r := gin.Default()
@@ -64,7 +64,7 @@ func TestValidateTransactionLimit(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	db := &mockQuerier{}
-	svc := service.NewParameterService(db, nil)
+	svc := service.NewParameterService(db, nil, nil)
 	adminSvc := service.NewAdminParameterService(db, nil, nil)
 
 	r := gin.Default()

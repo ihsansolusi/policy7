@@ -7,12 +7,14 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/ihsansolusi/lib7-service-go/logging"
 	"github.com/ihsansolusi/lib7-service-go/metrics"
 	"github.com/ihsansolusi/lib7-service-go/token"
 	"github.com/ihsansolusi/lib7-service-go/tracing"
 	"github.com/ihsansolusi/policy7/internal/api"
 	"github.com/ihsansolusi/policy7/internal/service"
+	"github.com/ihsansolusi/policy7/internal/service/branchscope"
 	"github.com/ihsansolusi/policy7/internal/store"
 	"github.com/joho/godotenv"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -81,7 +83,7 @@ func main() {
 	}
 
 	// Initialize Service
-	paramSvc := service.NewParameterService(querier, redisCache)
+	paramSvc := service.NewParameterService(querier, redisCache, querier)
 	adminSvc := service.NewAdminParameterService(querier, redisCache, natsClient)
 
 	// Cache warming (background)
@@ -90,6 +92,22 @@ func main() {
 			log.Warn().Err(err).Msg("Cache warming failed")
 		}
 	}()
+
+	// Branch scope sync poller (syncs from enterprise /v1/source-contracts/branch-scope)
+	branchScopeURL := os.Getenv("ENTERPRISE_URL")
+	if branchScopeURL != "" {
+		branchScopeURL += "/v1/source-contracts/branch-scope"
+	}
+	orgIDStr := os.Getenv("ORG_ID")
+	orgID, _ := uuid.Parse(orgIDStr)
+	bsPoller := branchscope.NewPoller(branchscope.Config{
+		SourceURL:     branchScopeURL,
+		ClientID:      os.Getenv("M2M_CLIENT_ID"),
+		ClientSecret:  os.Getenv("M2M_CLIENT_SECRET"),
+		TokenEndpoint: os.Getenv("AUTH_TOKEN_ENDPOINT"),
+		OrgID:         orgID,
+	}, querier, log)
+	go bsPoller.Start(ctx)
 
 	// Token maker for JWT validation on /v1 and /admin/v1 routes.
 	// Pattern matches core7-service-enterprise and audit7: bearer token OR

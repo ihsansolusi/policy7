@@ -8,21 +8,28 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/ihsansolusi/policy7/internal/domain"
 	"github.com/ihsansolusi/policy7/internal/store"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"go.opentelemetry.io/otel"
 	"golang.org/x/sync/singleflight"
 )
 
+// ErrNotFound is returned when a requested parameter does not exist.
+var ErrNotFound = errors.New("parameter not found")
+
 type ParameterService struct {
 	db    store.Querier
+	bsDB  store.BranchScopeQuerier
 	cache *store.RedisCache
 	sg    singleflight.Group
 }
 
-func NewParameterService(db store.Querier, cache *store.RedisCache) *ParameterService {
+func NewParameterService(db store.Querier, cache *store.RedisCache, bsDB store.BranchScopeQuerier) *ParameterService {
 	return &ParameterService{
 		db:    db,
+		bsDB:  bsDB,
 		cache: cache,
 	}
 }
@@ -80,7 +87,7 @@ func (s *ParameterService) GetParameter(ctx context.Context, orgID uuid.UUID, ca
 
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
-				return nil, fmt.Errorf("%s: parameter not found", op)
+				return nil, fmt.Errorf("%s: %w", op, ErrNotFound)
 			}
 			return nil, fmt.Errorf("%s: failed to get parameter: %w", op, err)
 		}
@@ -142,6 +149,98 @@ func (s *ParameterService) GetEffectiveParameter(ctx context.Context, orgID uuid
 	}
 
 	return nil, fmt.Errorf("no effective parameter found for %s:%s", category, name)
+}
+
+// ResolveParameter implements Option C: BRANCH → BRANCH_TYPE → GLOBAL fallback.
+// Tier 1 looks for a branch-specific override, tier 2 for a branch_type default,
+// tier 3 for an org-global value. Returns domain.Parameter for use by callers.
+func (s *ParameterService) ResolveParameter(ctx context.Context, orgID uuid.UUID, branchID uuid.UUID, category, name string) (*domain.Parameter, error) {
+	const op = "service.ParameterService.ResolveParameter"
+	ctx, span := otel.Tracer("policy7").Start(ctx, op)
+	defer span.End()
+
+	branchStr := branchID.String()
+
+	// Tier 1: branch-specific
+	p, err := s.GetParameter(ctx, orgID, category, name, "branch", &branchStr, nil)
+	if err == nil {
+		return storeParamToDomain(*p), nil
+	}
+	if !errors.Is(err, ErrNotFound) {
+		span.RecordError(err)
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	// Tier 2: branch_type
+	if s.bsDB != nil {
+		scope, err := s.bsDB.GetBranchScope(ctx, branchID)
+		if err == nil && scope.BranchType != "" {
+			p, err = s.GetParameter(ctx, orgID, category, name, "branch_type", &scope.BranchType, nil)
+			if err == nil {
+				return storeParamToDomain(*p), nil
+			}
+			if !errors.Is(err, ErrNotFound) {
+				span.RecordError(err)
+				return nil, fmt.Errorf("%s: %w", op, err)
+			}
+		}
+	}
+
+	// Tier 3: global
+	p, err = s.GetParameter(ctx, orgID, category, name, "global", nil, nil)
+	if err != nil {
+		span.RecordError(ErrNotFound)
+		return nil, fmt.Errorf("%s: %w", op, ErrNotFound)
+	}
+	return storeParamToDomain(*p), nil
+}
+
+func storeParamToDomain(p store.Parameter) *domain.Parameter {
+	dp := &domain.Parameter{
+		Category:  p.Category,
+		Name:      p.Name,
+		AppliesTo: p.AppliesTo,
+		Value:     p.Value,
+		ValueType: p.ValueType,
+		Version:   int(p.Version),
+		IsActive:  p.IsActive,
+	}
+	if p.ID.Valid {
+		dp.ID = uuid.UUID(p.ID.Bytes)
+	}
+	if p.OrgID.Valid {
+		dp.OrgID = uuid.UUID(p.OrgID.Bytes)
+	}
+	if p.AppliesToID.Valid {
+		s := p.AppliesToID.String
+		dp.AppliesToID = &s
+	}
+	if p.Product.Valid {
+		s := p.Product.String
+		dp.Product = &s
+	}
+	if p.Unit.Valid {
+		s := p.Unit.String
+		dp.Unit = &s
+	}
+	if p.Scope.Valid {
+		s := p.Scope.String
+		dp.Scope = &s
+	}
+	if p.EffectiveFrom.Valid {
+		dp.EffectiveFrom = p.EffectiveFrom.Time
+	}
+	if p.EffectiveUntil.Valid {
+		t := p.EffectiveUntil.Time
+		dp.EffectiveUntil = &t
+	}
+	if p.CreatedAt.Valid {
+		dp.CreatedAt = p.CreatedAt.Time
+	}
+	if p.UpdatedAt.Valid {
+		dp.UpdatedAt = p.UpdatedAt.Time
+	}
+	return dp
 }
 
 func (s *ParameterService) WarmUpCache(ctx context.Context) error {
