@@ -109,5 +109,16 @@ func SetupRoutes(
 		adminV1.PUT("/params/:id", adminHandler.Update)
 		adminV1.DELETE("/params/:id", adminHandler.Delete)
 		adminV1.GET("/params/:id/history", adminHandler.GetHistory)
+
+		// Workflow7 approval callbacks — restricted to M2M callers (workflow7)
+		// and require a valid audit signature. Middleware applied at GROUP level.
+		paramsWf := adminV1.Group("/params")
+		paramsWf.Use(middleware.RequireM2M())
+		paramsWf.Use(middleware.VerifyAuditSignatureFromEnv())
+		{
+			paramsWf.POST("/wf-create", adminHandler.WfCreate)
+			paramsWf.PUT("/:id/wf-update", adminHandler.WfUpdate)
+			paramsWf.POST("/:id/wf-delete", adminHandler.WfDelete)
+		}
 	}
 }
