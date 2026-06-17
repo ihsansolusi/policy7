@@ -133,6 +133,9 @@ func (h *AdminHandler) WfCreate(c *gin.Context) {
 		CreatedBy:      pgUserID,
 	}, req.ChangeReason)
 	if err != nil {
+		if writeSchemaError(c, err) {
+			return
+		}
 		span.RecordError(err)
 		logger.Error().Err(err).Str("op", op).Str("wf_instance_id", env.WfInstanceID).Msg("wf create parameter failed")
 		writeError(c, http.StatusInternalServerError, "POLICY_BACKEND_UNAVAILABLE", err.Error(), true, nil)
@@ -189,6 +192,9 @@ func (h *AdminHandler) WfUpdate(c *gin.Context) {
 
 	param, err := h.svc.Update(ctx, id, orgID, userID, req.Value, req.ChangeReason)
 	if err != nil {
+		if writeSchemaError(c, err) {
+			return
+		}
 		span.RecordError(err)
 		logger.Error().Err(err).Str("op", op).Str("id", id.String()).Str("wf_instance_id", env.WfInstanceID).Msg("wf update parameter failed")
 		if strings.Contains(err.Error(), "inactive parameter") {

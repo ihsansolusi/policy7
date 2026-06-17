@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/ihsansolusi/policy7/internal/service"
 	"github.com/ihsansolusi/policy7/internal/store"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -35,6 +36,12 @@ func (m *mockAdminQuerier) CreateParameter(ctx context.Context, arg store.Create
 
 func (m *mockAdminQuerier) CreateParameterHistory(ctx context.Context, arg store.CreateParameterHistoryParams) (store.ParameterHistory, error) {
 	return store.ParameterHistory{}, nil
+}
+
+// GetParameterCategoryByCode reports "no category" so value-schema validation
+// is skipped for tests that don't exercise it (Wave C backstop is opt-in).
+func (m *mockAdminQuerier) GetParameterCategoryByCode(ctx context.Context, arg store.GetParameterCategoryByCodeParams) (store.ParameterCategory, error) {
+	return store.ParameterCategory{}, pgx.ErrNoRows
 }
 
 func TestAdminCreateParameter(t *testing.T) {

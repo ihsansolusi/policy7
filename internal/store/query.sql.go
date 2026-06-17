@@ -410,3 +410,220 @@ func (q *Queries) ListParametersFiltered(ctx context.Context, arg ListParameters
 	}
 	return items, nil
 }
+
+const listParameterCategories = `-- name: ListParameterCategories :many
+SELECT id, org_id, code, name, description, value_schema, default_value, display_order, icon, color, is_active, created_by, created_at, updated_by, updated_at FROM parameter_categories
+WHERE org_id = $1
+ORDER BY display_order ASC, code ASC
+`
+
+// List all category metadata for an org (active + inactive), ordered for display.
+func (q *Queries) ListParameterCategories(ctx context.Context, orgID pgtype.UUID) ([]ParameterCategory, error) {
+	rows, err := q.db.Query(ctx, listParameterCategories, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ParameterCategory{}
+	for rows.Next() {
+		var i ParameterCategory
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrgID,
+			&i.Code,
+			&i.Name,
+			&i.Description,
+			&i.ValueSchema,
+			&i.DefaultValue,
+			&i.DisplayOrder,
+			&i.Icon,
+			&i.Color,
+			&i.IsActive,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedBy,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getParameterCategoryByCode = `-- name: GetParameterCategoryByCode :one
+SELECT id, org_id, code, name, description, value_schema, default_value, display_order, icon, color, is_active, created_by, created_at, updated_by, updated_at FROM parameter_categories
+WHERE org_id = $1 AND code = $2
+`
+
+type GetParameterCategoryByCodeParams struct {
+	OrgID pgtype.UUID `json:"org_id"`
+	Code  string      `json:"code"`
+}
+
+func (q *Queries) GetParameterCategoryByCode(ctx context.Context, arg GetParameterCategoryByCodeParams) (ParameterCategory, error) {
+	row := q.db.QueryRow(ctx, getParameterCategoryByCode, arg.OrgID, arg.Code)
+	var i ParameterCategory
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.Code,
+		&i.Name,
+		&i.Description,
+		&i.ValueSchema,
+		&i.DefaultValue,
+		&i.DisplayOrder,
+		&i.Icon,
+		&i.Color,
+		&i.IsActive,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedBy,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createParameterCategory = `-- name: CreateParameterCategory :one
+INSERT INTO parameter_categories (
+    org_id, code, name, description, value_schema, default_value,
+    display_order, icon, color, is_active, created_by
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+)
+RETURNING id, org_id, code, name, description, value_schema, default_value, display_order, icon, color, is_active, created_by, created_at, updated_by, updated_at
+`
+
+type CreateParameterCategoryParams struct {
+	OrgID        pgtype.UUID     `json:"org_id"`
+	Code         string          `json:"code"`
+	Name         string          `json:"name"`
+	Description  pgtype.Text     `json:"description"`
+	ValueSchema  json.RawMessage `json:"value_schema"`
+	DefaultValue json.RawMessage `json:"default_value"`
+	DisplayOrder pgtype.Int4     `json:"display_order"`
+	Icon         pgtype.Text     `json:"icon"`
+	Color        pgtype.Text     `json:"color"`
+	IsActive     bool            `json:"is_active"`
+	CreatedBy    pgtype.UUID     `json:"created_by"`
+}
+
+func (q *Queries) CreateParameterCategory(ctx context.Context, arg CreateParameterCategoryParams) (ParameterCategory, error) {
+	row := q.db.QueryRow(ctx, createParameterCategory,
+		arg.OrgID,
+		arg.Code,
+		arg.Name,
+		arg.Description,
+		arg.ValueSchema,
+		arg.DefaultValue,
+		arg.DisplayOrder,
+		arg.Icon,
+		arg.Color,
+		arg.IsActive,
+		arg.CreatedBy,
+	)
+	var i ParameterCategory
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.Code,
+		&i.Name,
+		&i.Description,
+		&i.ValueSchema,
+		&i.DefaultValue,
+		&i.DisplayOrder,
+		&i.Icon,
+		&i.Color,
+		&i.IsActive,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedBy,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateParameterCategory = `-- name: UpdateParameterCategory :one
+UPDATE parameter_categories
+SET name = $3,
+    description = $4,
+    value_schema = $5,
+    default_value = $6,
+    display_order = $7,
+    icon = $8,
+    color = $9,
+    is_active = $10,
+    updated_by = $11,
+    updated_at = NOW()
+WHERE org_id = $1 AND code = $2
+RETURNING id, org_id, code, name, description, value_schema, default_value, display_order, icon, color, is_active, created_by, created_at, updated_by, updated_at
+`
+
+type UpdateParameterCategoryParams struct {
+	OrgID        pgtype.UUID     `json:"org_id"`
+	Code         string          `json:"code"`
+	Name         string          `json:"name"`
+	Description  pgtype.Text     `json:"description"`
+	ValueSchema  json.RawMessage `json:"value_schema"`
+	DefaultValue json.RawMessage `json:"default_value"`
+	DisplayOrder pgtype.Int4     `json:"display_order"`
+	Icon         pgtype.Text     `json:"icon"`
+	Color        pgtype.Text     `json:"color"`
+	IsActive     bool            `json:"is_active"`
+	UpdatedBy    pgtype.UUID     `json:"updated_by"`
+}
+
+func (q *Queries) UpdateParameterCategory(ctx context.Context, arg UpdateParameterCategoryParams) (ParameterCategory, error) {
+	row := q.db.QueryRow(ctx, updateParameterCategory,
+		arg.OrgID,
+		arg.Code,
+		arg.Name,
+		arg.Description,
+		arg.ValueSchema,
+		arg.DefaultValue,
+		arg.DisplayOrder,
+		arg.Icon,
+		arg.Color,
+		arg.IsActive,
+		arg.UpdatedBy,
+	)
+	var i ParameterCategory
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.Code,
+		&i.Name,
+		&i.Description,
+		&i.ValueSchema,
+		&i.DefaultValue,
+		&i.DisplayOrder,
+		&i.Icon,
+		&i.Color,
+		&i.IsActive,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedBy,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const deactivateParameterCategory = `-- name: DeactivateParameterCategory :exec
+UPDATE parameter_categories
+SET is_active = FALSE, updated_by = $3, updated_at = NOW()
+WHERE org_id = $1 AND code = $2
+`
+
+type DeactivateParameterCategoryParams struct {
+	OrgID     pgtype.UUID `json:"org_id"`
+	Code      string      `json:"code"`
+	UpdatedBy pgtype.UUID `json:"updated_by"`
+}
+
+func (q *Queries) DeactivateParameterCategory(ctx context.Context, arg DeactivateParameterCategoryParams) error {
+	_, err := q.db.Exec(ctx, deactivateParameterCategory, arg.OrgID, arg.Code, arg.UpdatedBy)
+	return err
+}

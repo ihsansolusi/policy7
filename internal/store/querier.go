@@ -6,19 +6,27 @@ package store
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
 	CreateParameter(ctx context.Context, arg CreateParameterParams) (Parameter, error)
+	CreateParameterCategory(ctx context.Context, arg CreateParameterCategoryParams) (ParameterCategory, error)
 	CreateParameterHistory(ctx context.Context, arg CreateParameterHistoryParams) (ParameterHistory, error)
 	DeactivateParameter(ctx context.Context, arg DeactivateParameterParams) error
+	DeactivateParameterCategory(ctx context.Context, arg DeactivateParameterCategoryParams) error
 	GetParameter(ctx context.Context, arg GetParameterParams) (Parameter, error)
 	GetParameterByID(ctx context.Context, arg GetParameterByIDParams) (Parameter, error)
+	GetParameterCategoryByCode(ctx context.Context, arg GetParameterCategoryByCodeParams) (ParameterCategory, error)
 	GetParameterHistory(ctx context.Context, arg GetParameterHistoryParams) ([]ParameterHistory, error)
+	// List all category metadata for an org (active + inactive), ordered for display.
+	ListParameterCategories(ctx context.Context, orgID pgtype.UUID) ([]ParameterCategory, error)
 	ListParameters(ctx context.Context, arg ListParametersParams) ([]Parameter, error)
 	// List parameters with optional category/product/applies_to filters.
 	// Pass NULL to skip a filter. Used by admin UI list pages.
 	ListParametersFiltered(ctx context.Context, arg ListParametersFilteredParams) ([]Parameter, error)
+	UpdateParameterCategory(ctx context.Context, arg UpdateParameterCategoryParams) (ParameterCategory, error)
 }
 
 var _ Querier = (*Queries)(nil)

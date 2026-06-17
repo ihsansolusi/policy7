@@ -21,13 +21,44 @@ SET row_security = off;
 -- Data for Name: parameter_categories; Type: TABLE DATA; Schema: public; Owner: -
 --
 
-INSERT INTO public.parameter_categories VALUES ('b946796e-838d-5501-b737-90af0800b977', '00000000-0000-0000-0000-000000000001', 'transaction_limit', 'Transaction Limits', 'Per-role / per-product transaction caps', NULL, NULL, 1, 'money', 'limit', true, '2026-05-19 14:19:53.419173+00', '2026-05-19 14:19:53.419173+00');
-INSERT INTO public.parameter_categories VALUES ('fb9d1f24-17c1-5a0d-8c63-2d506b411cef', '00000000-0000-0000-0000-000000000001', 'authorization_limit', 'Authorization Limits', 'Auto-auth thresholds + approver caps', NULL, NULL, 2, 'shield', 'limit', true, '2026-05-19 14:19:53.426592+00', '2026-05-19 14:19:53.426592+00');
-INSERT INTO public.parameter_categories VALUES ('d135365b-e620-5877-b61b-3705d358a4a6', '00000000-0000-0000-0000-000000000001', 'rate', 'Rates', 'Interest rates, deposit rates', NULL, NULL, 3, 'percent', 'money', true, '2026-05-19 14:19:53.429052+00', '2026-05-19 14:19:53.429052+00');
-INSERT INTO public.parameter_categories VALUES ('6a37942c-9541-58d0-b929-591023a02ab4', '00000000-0000-0000-0000-000000000001', 'fee', 'Fees', 'Transaction fees, monthly fees', NULL, NULL, 4, 'tag', 'money', true, '2026-05-19 14:19:53.431491+00', '2026-05-19 14:19:53.431491+00');
-INSERT INTO public.parameter_categories VALUES ('abdeeb21-0d20-5ec9-926c-0240fc85be5c', '00000000-0000-0000-0000-000000000001', 'regulatory', 'Regulatory Thresholds', 'CTR / STR / KYC thresholds', NULL, NULL, 5, 'alert-triangle', 'compliance', true, '2026-05-19 14:19:53.433857+00', '2026-05-19 14:19:53.433857+00');
-INSERT INTO public.parameter_categories VALUES ('20a9c2ab-18ed-57ab-b455-f544f2b42b92', '00000000-0000-0000-0000-000000000001', 'operational_hours', 'Operational Hours', 'Branch / module operating windows', NULL, NULL, 6, 'clock', 'hours', true, '2026-05-19 14:19:53.436204+00', '2026-05-19 14:19:53.436204+00');
-INSERT INTO public.parameter_categories VALUES ('c57001a0-5eed-4000-a000-000000000001', '00000000-0000-0000-0000-000000000001', 'system', 'System', 'System-level global configuration parameters', NULL, NULL, 7, 'settings', 'default', true, '2026-05-24 02:29:48.779138+00', '2026-05-24 02:29:48.779138+00');
+-- Wave C (core7-devroot#568): seed the 7 base categories WITH value_schema
+-- (JSON Schema + x-ui presentation hints + x-rules cross-field validation).
+-- Idempotent upsert keyed on (org_id, code) so re-seeding refreshes the schema.
+-- Explicit column list (the table has created_by/updated_by columns now).
+INSERT INTO public.parameter_categories
+    (id, org_id, code, name, description, value_schema, default_value, display_order, icon, color, is_active)
+VALUES
+('b946796e-838d-5501-b737-90af0800b977', '00000000-0000-0000-0000-000000000001', 'transaction_limit', 'Transaction Limits', 'Per-role / per-product transaction caps',
+ '{"type":"object","required":["transaction_limit","authorization_limit","currency"],"properties":{"transaction_limit":{"type":"number","minimum":0,"x-ui":{"labelKey":"policy.value.txnLimit","numeric":{"kind":"currency","currencyField":"currency"},"span":6}},"authorization_limit":{"type":"number","minimum":0,"x-ui":{"labelKey":"policy.value.authLimit","numeric":{"kind":"currency","currencyField":"currency"},"span":6}},"currency":{"type":"string","enum":["IDR"],"default":"IDR","x-ui":{"widget":"select","labelKey":"policy.value.currency","span":6}},"scope":{"type":"string","enum":["per_transaction","per_day","per_month"],"x-ui":{"widget":"select","labelKey":"policy.value.scope","span":6}}},"x-ui":{"layout":{"sections":[{"titleKey":"policy.section.limits","fields":["transaction_limit","authorization_limit"]},{"titleKey":"policy.section.meta","fields":["currency","scope"]}]}},"x-rules":[{"op":"lte","left":"authorization_limit","right":"transaction_limit","message":"Authorization limit must be <= transaction limit"}]}'::jsonb,
+ '{"transaction_limit":0,"authorization_limit":0,"currency":"IDR","scope":"per_transaction"}'::jsonb, 1, 'money', 'limit', true),
+('fb9d1f24-17c1-5a0d-8c63-2d506b411cef', '00000000-0000-0000-0000-000000000001', 'authorization_limit', 'Authorization Limits', 'Auto-auth thresholds + approver caps',
+ '{"type":"object","required":["authorization_limit","currency"],"properties":{"authorization_limit":{"type":"number","minimum":0,"x-ui":{"labelKey":"policy.value.authLimit","numeric":{"kind":"currency","currencyField":"currency"},"span":6}},"currency":{"type":"string","enum":["IDR"],"default":"IDR","x-ui":{"widget":"select","span":6}},"scope":{"type":"string","enum":["per_transaction","per_day","per_month"],"x-ui":{"widget":"select","span":6}}}}'::jsonb,
+ '{"authorization_limit":0,"currency":"IDR","scope":"per_transaction"}'::jsonb, 2, 'shield', 'limit', true),
+('d135365b-e620-5877-b61b-3705d358a4a6', '00000000-0000-0000-0000-000000000001', 'rate', 'Rates', 'Interest rates, deposit rates',
+ '{"type":"object","required":["rate","rate_unit"],"properties":{"rate":{"type":"number","minimum":0,"x-ui":{"labelKey":"policy.value.rate","numeric":{"kind":"percent","maxFractionDigits":4},"span":6}},"rate_unit":{"type":"string","enum":["percent_per_year","percent_per_month"],"default":"percent_per_year","x-ui":{"widget":"select","span":6}},"tenor_months":{"type":"integer","minimum":0,"x-ui":{"numeric":{"kind":"integer"},"span":6}},"calculation_method":{"type":"string","enum":["simple_interest","compound"],"x-ui":{"widget":"select","span":6}}}}'::jsonb,
+ '{"rate":0,"rate_unit":"percent_per_year"}'::jsonb, 3, 'percent', 'money', true),
+('6a37942c-9541-58d0-b929-591023a02ab4', '00000000-0000-0000-0000-000000000001', 'fee', 'Fees', 'Transaction fees, monthly fees',
+ '{"type":"object","required":["fee_name","flat_amount","currency"],"properties":{"fee_name":{"type":"string","minLength":1,"x-ui":{"labelKey":"policy.value.feeName","span":6}},"flat_amount":{"type":"number","minimum":0,"x-ui":{"numeric":{"kind":"currency","currencyField":"currency"},"span":6}},"currency":{"type":"string","enum":["IDR"],"default":"IDR","x-ui":{"widget":"select","span":6}},"fee_type":{"type":"string","enum":["flat","percentage"],"default":"flat","x-ui":{"widget":"select","span":6}}}}'::jsonb,
+ '{"fee_name":"","flat_amount":0,"currency":"IDR","fee_type":"flat"}'::jsonb, 4, 'tag', 'money', true),
+('abdeeb21-0d20-5ec9-926c-0240fc85be5c', '00000000-0000-0000-0000-000000000001', 'regulatory', 'Regulatory Thresholds', 'CTR / STR / KYC thresholds',
+ '{"type":"object","required":["threshold_amount","currency","report_type"],"properties":{"threshold_amount":{"type":"number","minimum":0,"x-ui":{"numeric":{"kind":"currency","currencyField":"currency"},"span":6}},"currency":{"type":"string","enum":["IDR"],"default":"IDR","x-ui":{"widget":"select","span":6}},"report_type":{"type":"string","enum":["CTR","STR","KYC"],"x-ui":{"widget":"select","span":6}}}}'::jsonb,
+ '{"threshold_amount":0,"currency":"IDR","report_type":"CTR"}'::jsonb, 5, 'alert-triangle', 'compliance', true),
+('20a9c2ab-18ed-57ab-b455-f544f2b42b92', '00000000-0000-0000-0000-000000000001', 'operational_hours', 'Operational Hours', 'Branch / module operating windows',
+ '{"type":"object","required":["day_of_week"],"properties":{"day_of_week":{"type":"string","enum":["MON","TUE","WED","THU","FRI","SAT","SUN"],"x-ui":{"widget":"select","span":4}},"is_open":{"type":"boolean","x-ui":{"widget":"toggle","span":4}},"open_time":{"type":"string","pattern":"^[0-2][0-9]:[0-5][0-9]$","x-ui":{"placeholder":"HH:MM","span":4}},"close_time":{"type":"string","pattern":"^[0-2][0-9]:[0-5][0-9]$","x-ui":{"placeholder":"HH:MM","span":4}}}}'::jsonb,
+ '{"day_of_week":"MON","is_open":true,"open_time":"08:00","close_time":"17:00"}'::jsonb, 6, 'clock', 'hours', true),
+('c57001a0-5eed-4000-a000-000000000001', '00000000-0000-0000-0000-000000000001', 'system', 'System', 'System-level global configuration parameters',
+ '{"type":"object","properties":{"key":{"type":"string","x-ui":{"span":6}},"value":{"type":"string","x-ui":{"span":6}}}}'::jsonb,
+ '{}'::jsonb, 7, 'settings', 'default', true)
+ON CONFLICT (org_id, code) DO UPDATE SET
+    name = EXCLUDED.name,
+    description = EXCLUDED.description,
+    value_schema = EXCLUDED.value_schema,
+    default_value = EXCLUDED.default_value,
+    display_order = EXCLUDED.display_order,
+    icon = EXCLUDED.icon,
+    color = EXCLUDED.color,
+    is_active = EXCLUDED.is_active,
+    updated_at = NOW();
 
 
 --

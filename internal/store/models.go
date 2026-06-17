@@ -49,7 +49,9 @@ type ParameterCategory struct {
 	Icon         pgtype.Text        `json:"icon"`
 	Color        pgtype.Text        `json:"color"`
 	IsActive     bool               `json:"is_active"`
+	CreatedBy    pgtype.UUID        `json:"created_by"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedBy    pgtype.UUID        `json:"updated_by"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 }
 

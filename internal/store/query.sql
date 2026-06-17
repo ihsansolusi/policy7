@@ -63,3 +63,42 @@ RETURNING *;
 SELECT * FROM parameter_history
 WHERE parameter_id = $1 AND org_id = $2
 ORDER BY changed_at DESC;
+
+-- name: ListParameterCategories :many
+-- List all category metadata for an org (active + inactive), ordered for display.
+SELECT * FROM parameter_categories
+WHERE org_id = $1
+ORDER BY display_order ASC, code ASC;
+
+-- name: GetParameterCategoryByCode :one
+SELECT * FROM parameter_categories
+WHERE org_id = $1 AND code = $2;
+
+-- name: CreateParameterCategory :one
+INSERT INTO parameter_categories (
+    org_id, code, name, description, value_schema, default_value,
+    display_order, icon, color, is_active, created_by
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+)
+RETURNING *;
+
+-- name: UpdateParameterCategory :one
+UPDATE parameter_categories
+SET name = $3,
+    description = $4,
+    value_schema = $5,
+    default_value = $6,
+    display_order = $7,
+    icon = $8,
+    color = $9,
+    is_active = $10,
+    updated_by = $11,
+    updated_at = NOW()
+WHERE org_id = $1 AND code = $2
+RETURNING *;
+
+-- name: DeactivateParameterCategory :exec
+UPDATE parameter_categories
+SET is_active = FALSE, updated_by = $3, updated_at = NOW()
+WHERE org_id = $1 AND code = $2;

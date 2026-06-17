@@ -204,6 +204,9 @@ func (h *AdminHandler) Create(c *gin.Context) {
 	}, req.ChangeReason)
 
 	if err != nil {
+		if writeSchemaError(c, err) {
+			return
+		}
 		span.RecordError(err)
 		logger.Error().Err(err).Str("op", op).Msg("failed")
 		writeError(c, http.StatusInternalServerError, "POLICY_BACKEND_UNAVAILABLE", err.Error(), true, nil)
@@ -258,6 +261,9 @@ func (h *AdminHandler) Update(c *gin.Context) {
 
 	param, err := h.svc.Update(ctx, id, orgID, userID, req.Value, req.ChangeReason)
 	if err != nil {
+		if writeSchemaError(c, err) {
+			return
+		}
 		span.RecordError(err)
 		logger.Error().Err(err).Str("op", op).Msg("failed")
 		if strings.Contains(err.Error(), "inactive parameter") {

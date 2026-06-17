@@ -68,6 +68,7 @@ func SetupRoutes(
 
 	handler := NewParameterHandler(svc, tracer, logger)
 	adminHandler := NewAdminHandler(adminSvc, tracer, logger)
+	categoryHandler := NewCategoryHandler(adminSvc, tracer, logger)
 	contractHandler := NewContractHandler(tracer, logger)
 
 	// Auth middleware applied to all /v1 and /admin/v1 endpoints:
@@ -109,6 +110,15 @@ func SetupRoutes(
 		adminV1.PUT("/params/:id", adminHandler.Update)
 		adminV1.DELETE("/params/:id", adminHandler.Delete)
 		adminV1.GET("/params/:id/history", adminHandler.GetHistory)
+
+		// Wave C — category metadata (value_schema + x-ui/x-rules).
+		// GET endpoints drive the dynamic value-form renderer; CRUD lets
+		// admins manage categories directly (workflow approval out of scope).
+		adminV1.GET("/categories", categoryHandler.List)
+		adminV1.GET("/categories/:code", categoryHandler.GetByCode)
+		adminV1.POST("/categories", categoryHandler.Create)
+		adminV1.PUT("/categories/:code", categoryHandler.Update)
+		adminV1.DELETE("/categories/:code", categoryHandler.Delete)
 
 		// Workflow7 approval callbacks — restricted to M2M callers (workflow7)
 		// and require a valid audit signature. Middleware applied at GROUP level.
