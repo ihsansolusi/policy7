@@ -348,7 +348,7 @@ SELECT id, org_id, category, name, applies_to, applies_to_id, product, value, va
 WHERE org_id = $1
   AND ($4::TEXT IS NULL OR category = $4::TEXT)
   AND ($5::TEXT IS NULL OR product = $5::TEXT)
-  AND ($6::TEXT IS NULL OR applies_to = $6::TEXT)
+  AND ($6::TEXT IS NULL OR applies_to::TEXT = $6::TEXT)
   AND is_active = TRUE
 ORDER BY name ASC, created_at DESC
 LIMIT $2 OFFSET $3

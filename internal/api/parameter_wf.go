@@ -67,7 +67,7 @@ func (h *AdminHandler) WfCreate(c *gin.Context) {
 	ctx, span := h.tracer.Start(c.Request.Context(), op)
 	defer span.End()
 
-	orgID, ok := getOrgID(c)
+	orgID, ok := getActorOrgID(c)
 	if !ok {
 		return
 	}
@@ -151,7 +151,7 @@ func (h *AdminHandler) WfUpdate(c *gin.Context) {
 	ctx, span := h.tracer.Start(c.Request.Context(), op)
 	defer span.End()
 
-	orgID, ok := getOrgID(c)
+	orgID, ok := getActorOrgID(c)
 	if !ok {
 		return
 	}
@@ -211,7 +211,7 @@ func (h *AdminHandler) WfDelete(c *gin.Context) {
 	ctx, span := h.tracer.Start(c.Request.Context(), op)
 	defer span.End()
 
-	orgID, ok := getOrgID(c)
+	orgID, ok := getActorOrgID(c)
 	if !ok {
 		return
 	}
@@ -252,6 +252,27 @@ func (h *AdminHandler) WfDelete(c *gin.Context) {
 
 	span.SetStatus(codes.Ok, "")
 	c.JSON(http.StatusOK, WfCallbackResponse{Success: true, ID: id.String()})
+}
+
+// getActorOrgID resolves the org from the audit-signed actor envelope
+// (X-Actor-OrgID), falling back to the direct-admin X-Org-ID header. workflow7
+// service-task callbacks send X-Actor-OrgID (lib7 ActorEnvelope convention),
+// not X-Org-ID — mirror getActorUserID so the wf-* handlers accept both.
+func getActorOrgID(c *gin.Context) (uuid.UUID, bool) {
+	raw := c.GetHeader("X-Actor-OrgID")
+	if raw == "" {
+		raw = c.GetHeader("X-Org-ID")
+	}
+	if raw == "" {
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "X-Actor-OrgID header is required", false, gin.H{"field": "org_id"})
+		return uuid.Nil, false
+	}
+	orgID, err := uuid.Parse(raw)
+	if err != nil {
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "invalid org ID format", false, gin.H{"field": "org_id"})
+		return uuid.Nil, false
+	}
+	return orgID, true
 }
 
 // getActorUserID resolves the acting user from the audit-signed actor envelope

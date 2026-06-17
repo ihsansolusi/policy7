@@ -32,13 +32,15 @@ func (s *AdminParameterService) Create(ctx context.Context, arg store.CreatePara
 	}
 
 	_, err = s.db.CreateParameterHistory(ctx, store.CreateParameterHistoryParams{
-		ParameterID:   param.ID,
-		OrgID:         param.OrgID,
-		NewValue:      param.Value,
-		ChangeType:    "create",
-		NewVersion:    param.Version,
-		ChangeReason:  pgtype.Text{String: changeReason, Valid: true},
-		ChangedBy:     arg.CreatedBy,
+		ParameterID:     param.ID,
+		OrgID:           param.OrgID,
+		NewValue:        param.Value,
+		ChangeType:      "create",
+		PreviousVersion: pgtype.Int4{Int32: 0, Valid: true},
+		NewVersion:      param.Version,
+		ChangeReason:    pgtype.Text{String: changeReason, Valid: true},
+		ChangeMetadata:  []byte("{}"),
+		ChangedBy:       arg.CreatedBy,
 	})
 	if err != nil {
 		fmt.Printf("failed to create history: %v\n", err)
@@ -143,6 +145,7 @@ func (s *AdminParameterService) Delete(ctx context.Context, id uuid.UUID, orgID 
 		PreviousVersion: pgtype.Int4{Int32: param.Version, Valid: true},
 		NewVersion:    param.Version,
 		ChangeReason:  pgtype.Text{String: reason, Valid: true},
+		ChangeMetadata: []byte("{}"),
 		ChangedBy:     pgUserID,
 	})
 	if err != nil {
@@ -217,6 +220,7 @@ func (s *AdminParameterService) Update(ctx context.Context, id uuid.UUID, orgID 
 		PreviousVersion: pgtype.Int4{Int32: oldParam.Version, Valid: true},
 		NewVersion:      newParam.Version,
 		ChangeReason:    pgtype.Text{String: reason, Valid: true},
+		ChangeMetadata:  []byte("{}"),
 		ChangedBy:       pgUserID,
 	})
 

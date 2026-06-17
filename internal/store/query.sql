@@ -39,7 +39,7 @@ SELECT * FROM parameters
 WHERE org_id = $1
   AND (sqlc.narg('category')::TEXT IS NULL OR category = sqlc.narg('category')::TEXT)
   AND (sqlc.narg('product')::TEXT IS NULL OR product = sqlc.narg('product')::TEXT)
-  AND (sqlc.narg('applies_to')::TEXT IS NULL OR applies_to = sqlc.narg('applies_to')::TEXT)
+  AND (sqlc.narg('applies_to')::TEXT IS NULL OR applies_to::TEXT = sqlc.narg('applies_to')::TEXT)
   AND is_active = TRUE
 ORDER BY name ASC, created_at DESC
 LIMIT $2 OFFSET $3;
