@@ -146,6 +146,7 @@ func (h *AdminHandler) WfCreate(c *gin.Context) {
 		Action: "create_parameter", ResourceType: "parameter",
 		ResourceID: pgUUIDString(param.ID), ResourceName: req.Category + "/" + req.Name,
 		OrgID: orgID.String(), UserID: userID.String(), WfInstanceID: env.WfInstanceID,
+		Data: env.Data,
 		After: json.RawMessage(env.Data),
 	})
 
@@ -216,6 +217,7 @@ func (h *AdminHandler) WfUpdate(c *gin.Context) {
 		Action: "update_parameter", ResourceType: "parameter",
 		ResourceID: id.String(),
 		OrgID:      orgID.String(), UserID: userID.String(), WfInstanceID: env.WfInstanceID,
+		Data:  env.Data,
 		After: json.RawMessage(env.Data),
 	})
 
@@ -274,6 +276,7 @@ func (h *AdminHandler) WfDelete(c *gin.Context) {
 		Action: "delete_parameter", ResourceType: "parameter",
 		ResourceID: id.String(),
 		OrgID:      orgID.String(), UserID: userID.String(), WfInstanceID: env.WfInstanceID,
+		Data:   env.Data,
 		Before: json.RawMessage(env.Data),
 	})
 
