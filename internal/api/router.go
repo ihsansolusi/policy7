@@ -130,5 +130,16 @@ func SetupRoutes(
 			paramsWf.PUT("/:id/wf-update", adminHandler.WfUpdate)
 			paramsWf.POST("/:id/wf-delete", adminHandler.WfDelete)
 		}
+
+		// Workflow7 approval callbacks for parameter categories — same M2M +
+		// audit-signature group middleware as the param callbacks (#576).
+		categoriesWf := adminV1.Group("/categories")
+		categoriesWf.Use(middleware.RequireM2M())
+		categoriesWf.Use(middleware.VerifyAuditSignatureFromEnv())
+		{
+			categoriesWf.POST("/wf-create", categoryHandler.WfCreate)
+			categoriesWf.PUT("/:code/wf-update", categoryHandler.WfUpdate)
+			categoriesWf.POST("/:code/wf-delete", categoryHandler.WfDelete)
+		}
 	}
 }
