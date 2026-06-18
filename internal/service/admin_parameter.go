@@ -27,15 +27,39 @@ func NewAdminParameterService(db store.Querier, cache *store.RedisCache, publish
 	}
 }
 
-// validateValueAgainstCategory enforces the category's value_schema (Wave C,
-// PLAN-WC-XUI-CONVENTION) against a parameter value. It is the authoritative
-// backstop shared by the direct admin API and the workflow7 wf-* callbacks.
-//
-// Validation is opt-in per category: if no matching category row exists, or the
-// category has no value_schema defined, the value is accepted unchanged. A
-// value that violates the schema (structure, x-rules, or array items) yields a
-// *domain.SchemaValidationError, which handlers map to HTTP 422.
-func (s *AdminParameterService) validateValueAgainstCategory(ctx context.Context, orgID pgtype.UUID, category string, value []byte) error {
+// validateCategoryOnCreate is the data-driven category gate for parameter
+// creation. Category validity is sourced entirely from parameter_categories —
+// there is no hardcoded allowlist — so a category is valid iff an active row
+// exists for the org. A missing/inactive category yields a *domain.CategoryError
+// (HTTP 422). When the category exists, its value_schema (Wave C,
+// PLAN-WC-XUI-CONVENTION) is enforced against the value, yielding a
+// *domain.SchemaValidationError (HTTP 422) on violation. Any field requirement
+// (e.g. product) comes from the schema's `required`, not from category-specific
+// code here.
+func (s *AdminParameterService) validateCategoryOnCreate(ctx context.Context, orgID pgtype.UUID, category string, value []byte) error {
+	cat, err := s.db.GetParameterCategoryByCode(ctx, store.GetParameterCategoryByCodeParams{
+		OrgID: orgID,
+		Code:  category,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return &domain.CategoryError{Code: category, Reason: "category does not exist for this org"}
+		}
+		return fmt.Errorf("failed to load category for validation: %w", err)
+	}
+	if !cat.IsActive {
+		return &domain.CategoryError{Code: category, Reason: "category is not active"}
+	}
+	return domain.ValidateValue(cat.ValueSchema, value)
+}
+
+// validateValueOnUpdate enforces the value_schema for an existing parameter's
+// category. Unlike create, it does NOT require the category to exist in
+// parameter_categories: legacy parameters may reference categories with no
+// metadata row, and those must remain editable. Validation is therefore opt-in
+// — a missing category row (or one without a value_schema) accepts the value
+// unchanged. A schema violation yields a *domain.SchemaValidationError (422).
+func (s *AdminParameterService) validateValueOnUpdate(ctx context.Context, orgID pgtype.UUID, category string, value []byte) error {
 	cat, err := s.db.GetParameterCategoryByCode(ctx, store.GetParameterCategoryByCodeParams{
 		OrgID: orgID,
 		Code:  category,
@@ -50,7 +74,7 @@ func (s *AdminParameterService) validateValueAgainstCategory(ctx context.Context
 }
 
 func (s *AdminParameterService) Create(ctx context.Context, arg store.CreateParameterParams, changeReason string) (*store.Parameter, error) {
-	if err := s.validateValueAgainstCategory(ctx, arg.OrgID, arg.Category, arg.Value); err != nil {
+	if err := s.validateCategoryOnCreate(ctx, arg.OrgID, arg.Category, arg.Value); err != nil {
 		return nil, err
 	}
 
@@ -210,7 +234,7 @@ func (s *AdminParameterService) Update(ctx context.Context, id uuid.UUID, orgID 
 		return nil, fmt.Errorf("cannot update inactive parameter")
 	}
 
-	if err := s.validateValueAgainstCategory(ctx, oldParam.OrgID, oldParam.Category, newValue); err != nil {
+	if err := s.validateValueOnUpdate(ctx, oldParam.OrgID, oldParam.Category, newValue); err != nil {
 		return nil, err
 	}
 

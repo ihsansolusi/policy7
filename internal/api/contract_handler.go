@@ -34,7 +34,7 @@ func (h *ContractHandler) Categories(c *gin.Context) {
 			{"code": "product_access", "requires": []string{"org_id", "role_id|role_code", "product"}},
 			{"code": "rate", "requires": []string{"org_id", "product"}},
 			{"code": "fee", "requires": []string{"org_id", "product"}},
-			{"code": "regulatory_threshold", "requires": []string{"org_id"}, "conditional": []string{"branch_id for branch-scoped"}},
+			{"code": "regulatory", "requires": []string{"org_id"}, "conditional": []string{"branch_id for branch-scoped"}},
 		},
 	})
 }

@@ -88,7 +88,7 @@ func (h *AdminHandler) WfCreate(c *gin.Context) {
 		writeError(c, http.StatusBadRequest, "INVALID_REQUEST", err.Error(), false, gin.H{"field": "data"})
 		return
 	}
-	if err := validateCategoryContext(req.Category, req.AppliesTo, req.AppliesToID, req.Product); err != nil {
+	if err := validateScopeContext(req.AppliesTo, req.AppliesToID); err != nil {
 		writeError(c, http.StatusUnprocessableEntity, "INVALID_CALLER_CONTEXT", err.Error(), false, nil)
 		return
 	}

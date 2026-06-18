@@ -355,13 +355,21 @@ func mergeCategory(current store.ParameterCategory, req categoryWriteRequest) me
 	return m
 }
 
-// writeSchemaError maps a *domain.SchemaValidationError to HTTP 422 and reports
-// whether it handled the error.
+// writeSchemaError maps domain validation errors to HTTP 422 and reports whether
+// it handled the error. A *domain.SchemaValidationError (value vs value_schema)
+// becomes INVALID_PARAMETER_VALUE; a *domain.CategoryError (data-driven category
+// gate) becomes INVALID_CATEGORY.
 func writeSchemaError(c *gin.Context, err error) bool {
 	var schemaErr *domain.SchemaValidationError
 	if errors.As(err, &schemaErr) {
 		writeError(c, http.StatusUnprocessableEntity, "INVALID_PARAMETER_VALUE",
 			"value failed schema validation", false, gin.H{"violations": schemaErr.Errors})
+		return true
+	}
+	var catErr *domain.CategoryError
+	if errors.As(err, &catErr) {
+		writeError(c, http.StatusUnprocessableEntity, "INVALID_CATEGORY",
+			catErr.Error(), false, gin.H{"category": catErr.Code})
 		return true
 	}
 	return false

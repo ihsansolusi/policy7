@@ -69,7 +69,7 @@ Error response:
 | Product Access | `product_access` | `org_id`, `role_id/role_code`, `product` | Product-scoped access policy |
 | Rates | `rate` | `org_id`, `product` | Tenor/variant dipetakan via `name`/value |
 | Fees | `fee` | `org_id`, `product` | Channel/variant dipetakan via `name`/value |
-| Regulatory Thresholds | `regulatory_threshold` | `org_id` | `branch_id` required bila branch-scoped |
+| Regulatory Thresholds | `regulatory` | `org_id` | `branch_id` required bila branch-scoped |
 
 ### 1.6 Bos7 Policy Management Route Contract (Plan 13 W2)
 

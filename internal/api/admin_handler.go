@@ -159,7 +159,7 @@ func (h *AdminHandler) Create(c *gin.Context) {
 		writeError(c, http.StatusBadRequest, "INVALID_REQUEST", err.Error(), false, nil)
 		return
 	}
-	if err := validateCategoryContext(req.Category, req.AppliesTo, req.AppliesToID, req.Product); err != nil {
+	if err := validateScopeContext(req.AppliesTo, req.AppliesToID); err != nil {
 		writeError(c, http.StatusUnprocessableEntity, "INVALID_CALLER_CONTEXT", err.Error(), false, nil)
 		return
 	}
@@ -514,25 +514,15 @@ func getUserID(c *gin.Context) (uuid.UUID, bool) {
 	return userID, true
 }
 
-func validateCategoryContext(category, appliesTo string, appliesToID, product *string) error {
-	supported := map[string]bool{
-		"transaction_limit":    true,
-		"approval_threshold":   true,
-		"operational_hours":    true,
-		"product_access":       true,
-		"rate":                 true,
-		"fee":                  true,
-		"regulatory_threshold": true,
-	}
-	if !supported[category] {
-		return errors.New("unsupported category")
-	}
+// validateScopeContext validates the scope shape of a parameter write. It is
+// intentionally NOT a category gate: category validity is data-driven and
+// enforced by the service against parameter_categories, and any field
+// requirement (e.g. product) is declared by the category's value_schema and
+// enforced by domain.ValidateValue. The only scope rule that lives here is the
+// branch-scope identifier requirement, which is request-shape, not category.
+func validateScopeContext(appliesTo string, appliesToID *string) error {
 	if appliesTo == "branch" && (appliesToID == nil || strings.TrimSpace(*appliesToID) == "") {
 		return errors.New("applies_to_id is required for branch scope")
-	}
-	productScoped := category == "transaction_limit" || category == "product_access" || category == "rate" || category == "fee"
-	if productScoped && (product == nil || strings.TrimSpace(*product) == "") {
-		return errors.New("product is required for this category")
 	}
 	return nil
 }

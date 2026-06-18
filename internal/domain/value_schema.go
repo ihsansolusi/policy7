@@ -61,6 +61,19 @@ func (e *SchemaValidationError) Error() string {
 	return "value schema validation failed: " + strings.Join(parts, "; ")
 }
 
+// CategoryError is returned when a parameter references a category that does not
+// exist (or is inactive) in parameter_categories. Category validity is fully
+// data-driven: a category is valid iff an active row exists for the org — there
+// is no hardcoded allowlist. Handlers map this to HTTP 422 (INVALID_CATEGORY).
+type CategoryError struct {
+	Code   string
+	Reason string
+}
+
+func (e *CategoryError) Error() string {
+	return fmt.Sprintf("category %q: %s", e.Code, e.Reason)
+}
+
 // ValidateValue validates a parameter value against a category value_schema.
 //
 // It enforces the JSON-Schema subset documented in PLAN-WC-XUI-CONVENTION
