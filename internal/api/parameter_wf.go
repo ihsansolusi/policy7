@@ -198,6 +198,9 @@ func (h *AdminHandler) WfUpdate(c *gin.Context) {
 		return
 	}
 
+	// Capture prior state for the audit before-snapshot (best-effort).
+	beforeParam, _ := h.svc.GetByID(ctx, id, orgID)
+
 	param, err := h.svc.Update(ctx, id, orgID, userID, req.Value, req.ChangeReason)
 	if err != nil {
 		if writeSchemaError(c, err) {
@@ -217,8 +220,9 @@ func (h *AdminHandler) WfUpdate(c *gin.Context) {
 		Action: "update_parameter", ResourceType: "parameter",
 		ResourceID: id.String(),
 		OrgID:      orgID.String(), UserID: userID.String(), WfInstanceID: env.WfInstanceID,
-		Data:  env.Data,
-		After: json.RawMessage(env.Data),
+		Data:   env.Data,
+		Before: beforeParam,
+		After:  json.RawMessage(env.Data),
 	})
 
 	span.SetStatus(codes.Ok, "")
@@ -265,6 +269,9 @@ func (h *AdminHandler) WfDelete(c *gin.Context) {
 		return
 	}
 
+	// Capture prior state for the audit before-snapshot (best-effort).
+	beforeParam, _ := h.svc.GetByID(ctx, id, orgID)
+
 	if err := h.svc.Delete(ctx, id, orgID, userID, req.ChangeReason); err != nil {
 		span.RecordError(err)
 		logger.Error().Err(err).Str("op", op).Str("id", id.String()).Str("wf_instance_id", env.WfInstanceID).Msg("wf delete parameter failed")
@@ -277,7 +284,7 @@ func (h *AdminHandler) WfDelete(c *gin.Context) {
 		ResourceID: id.String(),
 		OrgID:      orgID.String(), UserID: userID.String(), WfInstanceID: env.WfInstanceID,
 		Data:   env.Data,
-		Before: json.RawMessage(env.Data),
+		Before: beforeParam,
 	})
 
 	span.SetStatus(codes.Ok, "")
