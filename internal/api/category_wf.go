@@ -100,6 +100,13 @@ func (h *CategoryHandler) WfCreate(c *gin.Context) {
 		return
 	}
 
+	forwardPolicyAudit(c, h.audit7, policyAuditEntry{
+		Action: "create_category", ResourceType: "parameter_category",
+		ResourceID: cat.Code, ResourceName: req.Name,
+		OrgID: orgID.String(), UserID: userID.String(), WfInstanceID: env.WfInstanceID,
+		After: json.RawMessage(env.Data),
+	})
+
 	span.SetStatus(codes.Ok, "")
 	c.JSON(http.StatusOK, WfCallbackResponse{Success: true, ID: cat.Code})
 }
@@ -173,6 +180,13 @@ func (h *CategoryHandler) WfUpdate(c *gin.Context) {
 		return
 	}
 
+	forwardPolicyAudit(c, h.audit7, policyAuditEntry{
+		Action: "update_category", ResourceType: "parameter_category",
+		ResourceID: cat.Code, ResourceName: merged.Name,
+		OrgID: orgID.String(), UserID: userID.String(), WfInstanceID: env.WfInstanceID,
+		Before: current, After: json.RawMessage(env.Data),
+	})
+
 	span.SetStatus(codes.Ok, "")
 	c.JSON(http.StatusOK, WfCallbackResponse{Success: true, ID: cat.Code})
 }
@@ -195,12 +209,30 @@ func (h *CategoryHandler) WfDelete(c *gin.Context) {
 	}
 
 	code := c.Param("code")
+	// Bind the envelope leniently to recover the wf instance id for the audit
+	// correlation; the delete itself only needs org/user/code.
+	var env wfCategoryEnvelope
+	_ = c.ShouldBindJSON(&env)
+
+	// Capture prior state for the audit before-snapshot (best-effort).
+	before, _ := h.svc.GetCategory(ctx, orgID, code)
 	if err := h.svc.DeleteCategory(ctx, orgID, userID, code); err != nil {
 		span.RecordError(err)
 		logger.Error().Err(err).Str("op", op).Str("code", code).Msg("wf delete category failed")
 		writeError(c, http.StatusInternalServerError, "POLICY_BACKEND_UNAVAILABLE", err.Error(), true, nil)
 		return
 	}
+
+	resourceName := code
+	if before != nil {
+		resourceName = before.Name
+	}
+	forwardPolicyAudit(c, h.audit7, policyAuditEntry{
+		Action: "delete_category", ResourceType: "parameter_category",
+		ResourceID: code, ResourceName: resourceName,
+		OrgID: orgID.String(), UserID: userID.String(), WfInstanceID: env.WfInstanceID,
+		Before: before,
+	})
 
 	span.SetStatus(codes.Ok, "")
 	c.JSON(http.StatusOK, WfCallbackResponse{Success: true, ID: code})

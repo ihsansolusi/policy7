@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
+	"github.com/ihsansolusi/lib7-service-go/audit7client"
 	"github.com/ihsansolusi/lib7-service-go/metrics"
 	"github.com/ihsansolusi/lib7-service-go/middleware"
 	"github.com/ihsansolusi/lib7-service-go/token"
@@ -66,9 +67,14 @@ func SetupRoutes(
 		})
 	})
 
+	// audit7 forwarder for policy mutations (system of record). nil when
+	// AUDIT7_URL is unset/placeholder → forwarding is a safe no-op. A nats://
+	// URL publishes durably to audit7's JetStream ingest; http:// is legacy.
+	audit7Client := audit7client.New(os.Getenv("AUDIT7_URL"), logger)
+
 	handler := NewParameterHandler(svc, tracer, logger)
-	adminHandler := NewAdminHandler(adminSvc, tracer, logger)
-	categoryHandler := NewCategoryHandler(adminSvc, tracer, logger)
+	adminHandler := NewAdminHandler(adminSvc, tracer, logger, audit7Client)
+	categoryHandler := NewCategoryHandler(adminSvc, tracer, logger, audit7Client)
 	contractHandler := NewContractHandler(tracer, logger)
 
 	// Auth middleware applied to all /v1 and /admin/v1 endpoints:

@@ -142,6 +142,13 @@ func (h *AdminHandler) WfCreate(c *gin.Context) {
 		return
 	}
 
+	forwardPolicyAudit(c, h.audit7, policyAuditEntry{
+		Action: "create_parameter", ResourceType: "parameter",
+		ResourceID: pgUUIDString(param.ID), ResourceName: req.Category + "/" + req.Name,
+		OrgID: orgID.String(), UserID: userID.String(), WfInstanceID: env.WfInstanceID,
+		After: json.RawMessage(env.Data),
+	})
+
 	span.SetStatus(codes.Ok, "")
 	c.JSON(http.StatusOK, WfCallbackResponse{Success: true, ID: pgUUIDString(param.ID)})
 }
@@ -205,6 +212,13 @@ func (h *AdminHandler) WfUpdate(c *gin.Context) {
 		return
 	}
 
+	forwardPolicyAudit(c, h.audit7, policyAuditEntry{
+		Action: "update_parameter", ResourceType: "parameter",
+		ResourceID: id.String(),
+		OrgID:      orgID.String(), UserID: userID.String(), WfInstanceID: env.WfInstanceID,
+		After: json.RawMessage(env.Data),
+	})
+
 	span.SetStatus(codes.Ok, "")
 	c.JSON(http.StatusOK, WfCallbackResponse{Success: true, ID: pgUUIDString(param.ID)})
 }
@@ -255,6 +269,13 @@ func (h *AdminHandler) WfDelete(c *gin.Context) {
 		writeError(c, http.StatusInternalServerError, "POLICY_BACKEND_UNAVAILABLE", err.Error(), true, nil)
 		return
 	}
+
+	forwardPolicyAudit(c, h.audit7, policyAuditEntry{
+		Action: "delete_parameter", ResourceType: "parameter",
+		ResourceID: id.String(),
+		OrgID:      orgID.String(), UserID: userID.String(), WfInstanceID: env.WfInstanceID,
+		Before: json.RawMessage(env.Data),
+	})
 
 	span.SetStatus(codes.Ok, "")
 	c.JSON(http.StatusOK, WfCallbackResponse{Success: true, ID: id.String()})

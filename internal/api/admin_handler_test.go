@@ -74,7 +74,7 @@ func doCreate(t *testing.T, db store.Querier, body map[string]interface{}) *http
 	gin.SetMode(gin.TestMode)
 	adminSvc := service.NewAdminParameterService(db, nil, nil)
 	r := gin.New()
-	h := NewAdminHandler(adminSvc, noop.NewTracerProvider().Tracer(""), zerolog.Nop())
+	h := NewAdminHandler(adminSvc, noop.NewTracerProvider().Tracer(""), zerolog.Nop(), nil)
 	r.POST("/admin/v1/params", h.Create)
 
 	raw, _ := json.Marshal(body)

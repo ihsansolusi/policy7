@@ -43,7 +43,7 @@ func TestCategoryWfCreate_PersistsCategory(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := &categoryCaptureQuerier{}
 	adminSvc := service.NewAdminParameterService(db, nil, nil)
-	h := NewCategoryHandler(adminSvc, noop.NewTracerProvider().Tracer(""), zerolog.Nop())
+	h := NewCategoryHandler(adminSvc, noop.NewTracerProvider().Tracer(""), zerolog.Nop(), nil)
 	r := gin.New()
 	r.POST("/admin/v1/categories/wf-create", h.WfCreate)
 

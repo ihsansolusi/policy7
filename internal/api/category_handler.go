@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/ihsansolusi/lib7-service-go/audit7client"
 	"github.com/ihsansolusi/lib7-service-go/logging"
 	"github.com/ihsansolusi/policy7/internal/domain"
 	"github.com/ihsansolusi/policy7/internal/service"
@@ -24,10 +25,11 @@ type CategoryHandler struct {
 	svc    *service.AdminParameterService
 	tracer trace.Tracer
 	logger zerolog.Logger
+	audit7 *audit7client.Client
 }
 
-func NewCategoryHandler(svc *service.AdminParameterService, tracer trace.Tracer, logger zerolog.Logger) *CategoryHandler {
-	return &CategoryHandler{svc: svc, tracer: tracer, logger: logger}
+func NewCategoryHandler(svc *service.AdminParameterService, tracer trace.Tracer, logger zerolog.Logger, audit7 *audit7client.Client) *CategoryHandler {
+	return &CategoryHandler{svc: svc, tracer: tracer, logger: logger, audit7: audit7}
 }
 
 // categoryResponse is the wire shape for a category. value_schema/default_value

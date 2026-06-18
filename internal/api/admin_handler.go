@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/ihsansolusi/lib7-service-go/audit7client"
 	"github.com/ihsansolusi/lib7-service-go/logging"
 	"github.com/ihsansolusi/lib7-service-go/middleware"
 	"github.com/ihsansolusi/policy7/internal/service"
@@ -41,10 +42,11 @@ type AdminHandler struct {
 	svc    *service.AdminParameterService
 	tracer trace.Tracer
 	logger zerolog.Logger
+	audit7 *audit7client.Client
 }
 
-func NewAdminHandler(svc *service.AdminParameterService, tracer trace.Tracer, logger zerolog.Logger) *AdminHandler {
-	return &AdminHandler{svc: svc, tracer: tracer, logger: logger}
+func NewAdminHandler(svc *service.AdminParameterService, tracer trace.Tracer, logger zerolog.Logger, audit7 *audit7client.Client) *AdminHandler {
+	return &AdminHandler{svc: svc, tracer: tracer, logger: logger, audit7: audit7}
 }
 
 func (h *AdminHandler) List(c *gin.Context) {

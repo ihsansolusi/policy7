@@ -77,7 +77,7 @@ func newParamCreateRequest(t *testing.T, value string) *http.Request {
 func setupAdminRouter(db store.Querier) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	adminSvc := service.NewAdminParameterService(db, nil, nil)
-	h := NewAdminHandler(adminSvc, noop.NewTracerProvider().Tracer(""), zerolog.Nop())
+	h := NewAdminHandler(adminSvc, noop.NewTracerProvider().Tracer(""), zerolog.Nop(), nil)
 	r := gin.New()
 	r.POST("/admin/v1/params", h.Create)
 	return r
@@ -118,7 +118,7 @@ func TestCreateParameter_MissingRequiredRejected(t *testing.T) {
 func TestListCategories(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	adminSvc := service.NewAdminParameterService(&schemaQuerier{}, nil, nil)
-	h := NewCategoryHandler(adminSvc, noop.NewTracerProvider().Tracer(""), zerolog.Nop())
+	h := NewCategoryHandler(adminSvc, noop.NewTracerProvider().Tracer(""), zerolog.Nop(), nil)
 	r := gin.New()
 	r.GET("/admin/v1/categories", h.List)
 
