@@ -423,6 +423,10 @@ func (h *AdminHandler) BulkImport(c *gin.Context) {
 			ValueType:   p.ValueType,
 			Unit:        unit,
 			Scope:       scope,
+			// effective_from is NOT NULL; the INSERT lists it explicitly so the
+			// column DEFAULT does not apply. Stamp now() like the single-create
+			// handler — otherwise every bulk row fails the not-null constraint.
+			EffectiveFrom: pgtype.Timestamptz{Time: time.Now(), Valid: true},
 		})
 	}
 
