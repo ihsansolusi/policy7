@@ -186,8 +186,11 @@ func (h *ParameterHandler) ValidateTransactionLimit(c *gin.Context) {
 		return
 	}
 
+	// transaction_limit params store both caps in the value:
+	// {"transaction_limit": <n>, "authorization_limit": <n>, "currency": ..., "scope": ...}
 	var limitData struct {
-		Limit float64 `json:"limit"`
+		TransactionLimit   float64 `json:"transaction_limit"`
+		AuthorizationLimit float64 `json:"authorization_limit"`
 	}
 	if err := json.Unmarshal(param.Value, &limitData); err != nil {
 		span.RecordError(err)
@@ -196,14 +199,60 @@ func (h *ParameterHandler) ValidateTransactionLimit(c *gin.Context) {
 		return
 	}
 
-	isValid := req.Amount <= limitData.Limit
+	txnMax := limitData.TransactionLimit
+	authMax := limitData.AuthorizationLimit
+
+	// Two-limit decision per docs/specs/02-api-detail.md §3.6:
+	//   amount > transaction_limit            → REJECTED
+	//   amount <= authorization_limit         → AUTO_AUTHORIZED
+	//   otherwise (auth < amount <= txn)      → REQUIRES_AUTHORIZATION
+	var decision, reason, nextStep, message string
+	var canInput, autoAuthorized bool
+	switch {
+	case req.Amount > txnMax:
+		decision = "REJECTED"
+		reason = "Amount exceeds transaction limit"
+	case req.Amount <= authMax:
+		decision = "AUTO_AUTHORIZED"
+		canInput = true
+		autoAuthorized = true
+		message = "Transaction automatically authorized"
+	default:
+		decision = "REQUIRES_AUTHORIZATION"
+		canInput = true
+		reason = "Amount exceeds authorization limit"
+		nextStep = "Request supervisor authorization"
+	}
+
+	txnLimit := gin.H{"max": txnMax}
+	if canInput {
+		txnLimit["remaining"] = txnMax - req.Amount
+	}
+
+	resp := gin.H{
+		"amount":              req.Amount,
+		"decision":            decision,
+		"can_input":           canInput,
+		"auto_authorized":     autoAuthorized,
+		"transaction_limit":   txnLimit,
+		"authorization_limit": gin.H{"max": authMax},
+		"parameter_used":      param.ID,
+		// Backward-compatible fields for the legacy single-limit callers.
+		"is_valid": canInput,
+		"limit":    txnMax,
+	}
+	if reason != "" {
+		resp["reason"] = reason
+	}
+	if nextStep != "" {
+		resp["next_step"] = nextStep
+	}
+	if message != "" {
+		resp["message"] = message
+	}
+
 	span.SetStatus(codes.Ok, "")
-	writeSuccess(c, http.StatusOK, gin.H{
-		"is_valid":       isValid,
-		"amount":         req.Amount,
-		"limit":          limitData.Limit,
-		"parameter_used": param.ID,
-	})
+	writeSuccess(c, http.StatusOK, resp)
 }
 
 func (h *ParameterHandler) GetApprovalThresholds(c *gin.Context) {
@@ -467,21 +516,37 @@ func (h *ParameterHandler) CheckAuthorizationLimit(c *gin.Context) {
 	}
 
 	var req struct {
-		RoleID string  `json:"role_id"`
-		Amount float64 `json:"amount"`
+		RoleID       string  `json:"role_id"`
+		ApproverRole string  `json:"approver_role"`
+		Name         string  `json:"name"`
+		Amount       float64 `json:"amount"`
+		Product      *string `json:"product"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		writeError(c, http.StatusBadRequest, "INVALID_REQUEST", err.Error(), false, nil)
 		return
 	}
-	if strings.TrimSpace(req.RoleID) == "" {
-		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "role_id is required", false, gin.H{"field": "role_id"})
+
+	// Accept either role_id or approver_role (spec §3.7 uses approver_role).
+	role := strings.TrimSpace(req.RoleID)
+	if role == "" {
+		role = strings.TrimSpace(req.ApproverRole)
+	}
+	if role == "" {
+		writeError(c, http.StatusBadRequest, "INVALID_CALLER_CONTEXT", "role_id or approver_role is required", false, gin.H{"field": "role_id"})
 		return
 	}
 
-	param, err := h.svc.GetParameter(ctx, orgID, "authorization_limit", "max_amount", "role", &req.RoleID, nil)
+	// The authorization_limit param name is configurable per request; default
+	// matches the seeded data model (name "auto_authorize_max", value key "limit_amount").
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		name = "auto_authorize_max"
+	}
+
+	param, err := h.svc.GetParameter(ctx, orgID, "authorization_limit", name, "role", &role, req.Product)
 	if err != nil {
-		param, err = h.svc.GetParameter(ctx, orgID, "authorization_limit", "max_amount", "global", nil, nil)
+		param, err = h.svc.GetParameter(ctx, orgID, "authorization_limit", name, "global", nil, req.Product)
 		if err != nil {
 			span.RecordError(err)
 			logger.Error().Err(err).Str("op", op).Msg("failed")
@@ -490,8 +555,9 @@ func (h *ParameterHandler) CheckAuthorizationLimit(c *gin.Context) {
 		}
 	}
 
+	// authorization_limit params store the cap under "limit_amount".
 	var limitData struct {
-		Limit float64 `json:"limit"`
+		LimitAmount float64 `json:"limit_amount"`
 	}
 	if err := json.Unmarshal(param.Value, &limitData); err != nil {
 		span.RecordError(err)
@@ -500,12 +566,28 @@ func (h *ParameterHandler) CheckAuthorizationLimit(c *gin.Context) {
 		return
 	}
 
-	isAuthorized := req.Amount <= limitData.Limit
-	span.SetStatus(codes.Ok, "")
-	writeSuccess(c, http.StatusOK, gin.H{
-		"is_authorized":  isAuthorized,
-		"amount":         req.Amount,
-		"limit":          limitData.Limit,
+	limit := limitData.LimitAmount
+	allowed := req.Amount <= limit
+
+	resp := gin.H{
+		"allowed":        allowed,
+		"approver_limit": limit,
+		"requested":      req.Amount,
 		"parameter_used": param.ID,
-	})
+		// Backward-compatible fields for the legacy callers.
+		"is_authorized": allowed,
+		"amount":        req.Amount,
+		"limit":         limit,
+	}
+	if allowed {
+		resp["remaining"] = limit - req.Amount
+		resp["message"] = "Approver can authorize this amount"
+	} else {
+		resp["exceeded_by"] = req.Amount - limit
+		resp["escalation_required"] = true
+		resp["message"] = "Amount exceeds approver authorization limit"
+	}
+
+	span.SetStatus(codes.Ok, "")
+	writeSuccess(c, http.StatusOK, resp)
 }
