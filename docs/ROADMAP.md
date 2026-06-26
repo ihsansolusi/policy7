@@ -31,10 +31,38 @@ Diperbarui 2026-06-26.
 
 ## 🔭 Backlog / belum diimplementasi
 
-### Retirement legacy compatibility paths
-- `GET /v1/params/rates/:product` & `GET /v1/params/fees/:product` masih `compatibility-only`.
-- **Blocker:** belum ada telemetry usage per-endpoint untuk keputusan retire yang aman.
-  → tambahkan instrumentation pemakaian sebelum menghapus.
+### API usage / deprecation candidates
+
+Review lintas-repo (2026-06-26) menemukan **~separuh surface tidak punya caller in-tree**.
+Consumer runtime nyata hanya **bos7-enterprise BFF** (reads `/admin/v1` + `/v1/.../effective`
++ bulk-import) dan **workflow7** (mutasi via `wf-*`). auth7 / auth7-ui / core7-service-* /
+Go SDK `pkg/client` **tidak** memanggil policy7 via HTTP.
+
+✅ **Telemetry terpasang** (2026-06-26): counter `policy7_endpoint_usage_total{route, caller}`
+di `/metrics` (`internal/api/usage_metrics.go`, middleware `trackUsage`) mencatat siapa
+(M2M `client_id` / delegated `act.sub` / `system` / `user`) yang memukul tiap
+deprecation-candidate. **Next:** amati di lingkungan nyata → hapus route+handler yang 0 caller.
+
+Endpoint yang di-track (kandidat retire):
+
+| Grup | Endpoint | Catatan |
+|---|---|---|
+| legacy | `GET /v1/params/rates/:product` · `/fees/:product` | compatibility-only |
+| /v1 basic | `GET /v1/params/:category/:name` | tersuperseded `…/effective` |
+| /v1 boundary | `GET /v1/params/operational-hours` · `/product-access` | dirancang utk ABAC auth7 — **auth7 tak pernah implement** (ABAC lokal Postgres) |
+| /v1 boundary | `GET /v1/params/approval-thresholds` | tak ada caller |
+| /v1 | `GET /v1/params/regulatory/:type` · `POST …/regulatory/:type/check` | tak ada caller (SDK wrap, 0 importer) |
+| /v1 | `POST /v1/params/transaction_limit/validate` · `…/authorization_limit/check` | simulator pakai `/effective` |
+| /v1 facade | `GET /v1/contracts/categories` · `/caller-context` · `/errors` | facade retired; BFF allowlist memblok `/v1/contracts/*` |
+| admin direct | `POST /admin/v1/params` · `PUT/DELETE …/:id` · `POST …/query` | tersuperseded alur `wf-*` (approval) |
+| admin direct | `POST /admin/v1/categories` · `PUT/DELETE …/:code` | tersuperseded alur category `wf-*` |
+
+> **Tidak** di-track (aktif dipakai): `/admin/v1/params` GET·`:id`·`:id/history`, `bulk-import`,
+> `/admin/v1/categories` GET·`:code`, semua `wf-*`, `/v1/params/:category/:name/effective`.
+
+**Go SDK `pkg/client`** (membungkus 4 method: ValidateTransactionLimit, GetEffectiveParameter,
+CheckRegulatoryThreshold, CheckAuthorizationLimit) punya **0 importer** di ekosistem →
+kandidat hapus. Service yang dulu diharapkan memakainya tidak memanggil policy7 sama sekali.
 
 ### Cross-stream dependency
 - Canonical role identifier (`role_id` vs `role_code`) masih bergantung pada auth7.
