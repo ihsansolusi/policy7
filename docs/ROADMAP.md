@@ -65,9 +65,12 @@ bukan via observasi telemetry. Mengikuti [docs/specs/06-api-grouping.md](specs/0
 (`/effective`, `resolve`, snapshot, `transaction_limit/validate`) · Grup 3 (`/admin/v1/categories`
 reads) · Grup 4 (NATS) · Grup 5 (`/health`, `/metrics`). Lihat [03-api](specs/03-api.md).
 
-- **Fase 5 — Discovery + SDK** (sisa): putuskan expose `value_schema` read di `/v1` untuk
-  consumer generik (saat ini hanya `/admin/v1`); **hapus `pkg/client` Go SDK** (4 method, 0
-  importer) atau align ke Grup 2 (`Resolve`/`BatchResolve`) bila nanti dipakai.
+- **Fase 5 — Discovery + SDK** ✅ (2026-06-26): **`pkg/client` Go SDK dihapus** (4 method, 0
+  importer; konsumen pakai REST `/v1` langsung — pola acuan auth7 `internal/policy7client`).
+  Menghapusnya sekaligus menyelesaikan kegagalan test pre-existing `pkg/client`.
+  **Discovery `value_schema` di `/v1`: ditunda (YAGNI)** — belum ada consumer non-admin yang
+  butuh bentuk value (auth7 tahu shape-nya); tetap di `/admin/v1/categories`. Tambahkan saat
+  consumer generik pertama muncul.
 
 ### Cross-stream dependency
 - Canonical role identifier (`role_id` vs `role_code`) masih bergantung pada auth7.

@@ -26,7 +26,7 @@ internal/store/        persistence
    ├─ branch_scope.go                        branch_scope queries
    └─ redis.go                               hot-cache
 internal/domain/       entities + value_schema validator + errors
-pkg/client/            Go SDK untuk konsumen
+(pkg/client SDK dihapus — konsumen pakai REST /v1 langsung)
 ```
 
 Konvensi Go (sama dengan service7-template): `const op = "pkg.Type.Method"`, error wrap

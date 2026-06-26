@@ -113,7 +113,7 @@ event, bukan polling tiap decision). Lihat [01-architecture](01-architecture.md)
 | `GET /v1/contracts/*` | ✅ dihapus (Fase 4, facade retired) |
 | `POST/PUT/DELETE /admin/v1/params`, `/categories`, `POST /params/query` | ✅ dihapus (Fase 3) → `wf-*` (Grup 1) |
 | `GET /admin/v1/{params,categories}` (+ `:id/history`, `bulk-import`, `wf-*`) | **tetap** (Grup 1) |
-| `pkg/client` Go SDK | hapus (0 importer) atau align ke Grup 2 (`Resolve`/`BatchResolve`) bila dipakai nanti |
+| `pkg/client` Go SDK | ✅ dihapus (Fase 5, 0 importer) — konsumen pakai REST /v1 langsung |
 
 Hasil: dari 30+ endpoint → kontrak inti kecil — **authoring (Grup 1) + resolve/snapshot/1
 decision (Grup 2) + discovery (Grup 3) + events (Grup 4) + ops (Grup 5)**.

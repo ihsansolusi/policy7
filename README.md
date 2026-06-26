@@ -43,7 +43,7 @@ internal/api     → REST handlers + middleware (auth, M2M, audit-signature)
 internal/service → business logic (resolution, versioning, NATS, branch-scope poller)
 internal/store   → PostgreSQL (sqlc) + Redis
 internal/domain  → entities, value_schema validator, errors
-pkg/client       → Go SDK untuk service konsumen
+(no SDK)         → konsumen panggil REST /v1 langsung (thin client; lihat 04-integration)
 ```
 
 ## Quick Start
@@ -67,11 +67,13 @@ make test
 
 ## API
 
-- **`/v1/*`** — consumer API (query parameter, validate transaction limit, rates/fees,
-  regulatory, operational hours). Butuh delegated JWT atau M2M.
-- **`/admin/v1/*`** — admin CRUD parameter & kategori + history + bulk-import. Dipakai
+- **`/v1/*`** — consumer inquiry (generik): `…/effective` (resolve satu), `resolve` (batch),
+  `?category=` (snapshot), `transaction_limit/validate` (decision helper). Butuh delegated JWT
+  atau M2M.
+- **`/admin/v1/*`** — admin reads parameter & kategori + history + bulk-import. Dipakai
   Policy Management UI di bos7-enterprise.
-- **`/admin/v1/.../wf-*`** — callback approval dari workflow7 (M2M + audit signature).
+- **`/admin/v1/.../wf-*`** — callback approval dari workflow7 (M2M + audit signature); satu-satunya
+  jalur mutasi.
 
 Daftar lengkap: [`docs/specs/03-api.md`](docs/specs/03-api.md).
 

@@ -62,11 +62,12 @@ dari enterprise (`ENTERPRISE_URL`). Dipakai resolution Option C tier `branch_typ
 `policy7.params.created|updated|deleted` di-publish saat mutasi; semua instance policy7
 subscribe `policy7.params.>` untuk invalidasi cache. `policy7.health` request-reply.
 
-## Go client SDK
+## Consuming policy7 (no SDK)
 
-```go
-import "github.com/ihsansolusi/policy7/pkg/client"
+The `pkg/client` Go SDK was **removed** (Fase 5, 0 importers). Consumers call the REST
+inquiry endpoints (Grup 2) directly with a thin HTTP client + their own delegated/M2M
+token, e.g. `GET /v1/params/{category}/{name}/effective` or `POST /v1/params/resolve`.
 
-c := client.NewClient(baseURL, apiKey, serviceID)
-res, _ := c.ValidateTransaction(ctx, req)
-```
+Reference implementation: auth7 `internal/policy7client/fetcher.go` (#161) — a small
+fetch-through client over `…/effective`, cache + NATS-invalidated. Mirror that pattern
+rather than reintroducing a shared SDK.
