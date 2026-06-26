@@ -1,7 +1,9 @@
-.PHONY: setup db-up db-down migrate-up migrate-down seed-up seed-down run test
+.PHONY: setup migrate-up migrate-down seed-up seed-down run test
 
 # ─── Variabel ──────────────────────────────────────────────────────────────────
 # GENERATE MIGRATION FILES (DEF → SQL): cd ../../appdefs/policy7 && make migrate-gen-reset
+# DB & Redis disediakan unified dev infra (dari root devroot: `make infra-up`).
+# DB `policy7` di-provision oleh scripts/db/provision-local-service-dbs.sh.
 MIGRATIONS   := migrations
 SEED_DIR     := migrations-seed
 DB_URL       ?= postgres://policy7:policy7secret@localhost:5432/policy7?sslmode=disable
@@ -9,12 +11,6 @@ SEED_PROFILE ?= demo
 
 setup:
 	go mod tidy
-
-db-up:
-	docker compose up -d postgres redis
-
-db-down:
-	docker compose down
 
 # ─── Jalankan Migration: SCHEMA (migrations/) ─────────────────────────────────
 migrate-up:

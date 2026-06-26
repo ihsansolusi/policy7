@@ -50,13 +50,18 @@ internal/domain  → entities, value_schema validator, errors
 
 Prasyarat: Go 1.22+, PostgreSQL 16, Redis 7, NATS (opsional di dev).
 
+DB & Redis disediakan **unified dev infra** (dari root devroot), bukan compose lokal:
+
 ```bash
-cp .env.example .env          # set DATABASE_URL, REDIS_URL, PORT, dst.
+# di root devroot — start shared postgres/redis/nats + provision DB `policy7`
+make infra-up
+
+# di supported-apps/policy7
+cp .env.example .env          # DATABASE_URL/REDIS_URL → unified infra (localhost:5432 / :6379)
 make setup                    # go mod tidy
-make db-up                    # docker compose: postgres + redis
 make migrate-up               # apply schema (migrations/)
 make seed-up                  # seed demo (migrations-seed/demo) — opsional
-make run                      # jalan di :8085
+make run                      # jalan di :8085   (atau dari root: make policy7-dev)
 make test
 ```
 
