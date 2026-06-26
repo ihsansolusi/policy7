@@ -104,14 +104,14 @@ event, bukan polling tiap decision). Lihat [01-architecture](01-architecture.md)
 | As-built | Target |
 |---|---|
 | `GET /v1/params/:category/:name/effective` | **tetap** (Grup 2 kanonik) |
-| `GET /v1/params/:category/:name` | hapus → `/effective` |
-| `GET /v1/params/{operational-hours,product-access,approval-thresholds}` | hapus → `resolve` / `snapshot` (Grup 2) |
-| `GET /v1/params/rates/:product`, `/fees/:product` | hapus → `snapshot(category=rate\|fee)` |
-| `GET /v1/params/regulatory/:type`, `POST …/check` | hapus → `resolve` + decision caller-side |
-| `POST /v1/params/authorization_limit/check` | hapus / fold ke decision helper |
+| `GET /v1/params/:category/:name` | ✅ dihapus (Fase 4) → `/effective` |
+| `GET /v1/params/{operational-hours,product-access,approval-thresholds}` | ✅ dihapus (Fase 4) → `resolve`/`snapshot` |
+| `GET /v1/params/rates/:product`, `/fees/:product` | ✅ dihapus (Fase 4) → `snapshot(category=rate\|fee)` |
+| `GET /v1/params/regulatory/:type`, `POST …/check` | ✅ dihapus (Fase 4) → `resolve` + decision caller-side |
+| `POST /v1/params/authorization_limit/check` | ✅ dihapus (Fase 4) |
 | `POST /v1/params/transaction_limit/validate` | **tetap** (Grup 2 decision helper) |
-| `GET /v1/contracts/*` | hapus (facade retired) |
-| `POST/PUT/DELETE /admin/v1/params`, `/categories`, `POST /params/query` | hapus → `wf-*` (Grup 1) |
+| `GET /v1/contracts/*` | ✅ dihapus (Fase 4, facade retired) |
+| `POST/PUT/DELETE /admin/v1/params`, `/categories`, `POST /params/query` | ✅ dihapus (Fase 3) → `wf-*` (Grup 1) |
 | `GET /admin/v1/{params,categories}` (+ `:id/history`, `bulk-import`, `wf-*`) | **tetap** (Grup 1) |
 | `pkg/client` Go SDK | hapus (0 importer) atau align ke Grup 2 (`Resolve`/`BatchResolve`) bila dipakai nanti |
 

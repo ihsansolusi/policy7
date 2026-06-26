@@ -67,18 +67,25 @@ const twoLimitSchema = `{"type":"object","required":["transaction_limit","author
 const authLimitSchema = `{"type":"object","required":["authorization_limit","currency"],` +
 	`"properties":{"authorization_limit":{"type":"number","minimum":0},"currency":{"type":"string","enum":["IDR"]}}}`
 
-// doCreate posts a create request through the admin Create handler and returns
-// the recorder. The querier's category map controls the data-driven gate.
+// doCreate posts a create request through the wf-create callback handler (the
+// surviving mutation path after direct CRUD was retired) and returns the
+// recorder. The querier's category map controls the data-driven gate, and the
+// shared validateScopeContext + service validation run identically to the old
+// direct handler. Success is HTTP 200 (WfCallbackResponse), not 201.
 func doCreate(t *testing.T, db store.Querier, body map[string]interface{}) *httptest.ResponseRecorder {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	adminSvc := service.NewAdminParameterService(db, nil, nil)
 	r := gin.New()
 	h := NewAdminHandler(adminSvc, noop.NewTracerProvider().Tracer(""), zerolog.Nop(), nil)
-	r.POST("/admin/v1/params", h.Create)
+	r.POST("/admin/v1/params/wf-create", h.WfCreate)
 
-	raw, _ := json.Marshal(body)
-	req, _ := http.NewRequest(http.MethodPost, "/admin/v1/params", bytes.NewBuffer(raw))
+	if _, ok := body["change_reason"]; !ok {
+		body["change_reason"] = "test create"
+	}
+	env := map[string]interface{}{"wf_instance_id": "wf-test", "data": body}
+	raw, _ := json.Marshal(env)
+	req, _ := http.NewRequest(http.MethodPost, "/admin/v1/params/wf-create", bytes.NewBuffer(raw))
 	req.Header.Set("X-Org-ID", uuid.New().String())
 	req.Header.Set("X-User-ID", uuid.New().String())
 	req.Header.Set("Content-Type", "application/json")
@@ -102,7 +109,7 @@ func TestAdminCreate_TransactionLimitRoleScopedNoProduct(t *testing.T) {
 		"value":      json.RawMessage(`{"transaction_limit":100000000,"authorization_limit":25000000,"currency":"IDR"}`),
 		"value_type": "json",
 	})
-	assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
 }
 
 // TestAdminCreate_AuthorizationLimitNoProduct: authorization_limit was missing
@@ -119,7 +126,7 @@ func TestAdminCreate_AuthorizationLimitNoProduct(t *testing.T) {
 		"value":      json.RawMessage(`{"authorization_limit":25000000,"currency":"IDR"}`),
 		"value_type": "json",
 	})
-	assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
 }
 
 // TestAdminCreate_BrandNewCategoryUsable: an admin-added category (not in any
@@ -136,7 +143,7 @@ func TestAdminCreate_BrandNewCategoryUsable(t *testing.T) {
 		"value":      json.RawMessage(`{"max_score":800}`),
 		"value_type": "json",
 	})
-	assert.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
 }
 
 // TestAdminCreate_UnknownCategoryRejected: a category with no row in

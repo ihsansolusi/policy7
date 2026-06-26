@@ -58,7 +58,7 @@ func (m *schemaQuerier) ListParameterCategories(ctx context.Context, orgID pgtyp
 
 func newParamCreateRequest(t *testing.T, value string) *http.Request {
 	t.Helper()
-	body, _ := json.Marshal(map[string]interface{}{
+	data := map[string]interface{}{
 		"category":      "transaction_limit",
 		"name":          "teller_transfer_max",
 		"applies_to":    "global",
@@ -66,20 +66,23 @@ func newParamCreateRequest(t *testing.T, value string) *http.Request {
 		"value":         json.RawMessage(value),
 		"value_type":    "json",
 		"change_reason": "wave c test",
-	})
-	req, _ := http.NewRequest(http.MethodPost, "/admin/v1/params", bytes.NewBuffer(body))
+	}
+	body, _ := json.Marshal(map[string]interface{}{"wf_instance_id": "wf-test", "data": data})
+	req, _ := http.NewRequest(http.MethodPost, "/admin/v1/params/wf-create", bytes.NewBuffer(body))
 	req.Header.Set("X-Org-ID", uuid.New().String())
 	req.Header.Set("X-User-ID", uuid.New().String())
 	req.Header.Set("Content-Type", "application/json")
 	return req
 }
 
+// setupAdminRouter wires the surviving wf-create mutation path (direct CRUD was
+// retired); the value_schema validation backstop runs identically.
 func setupAdminRouter(db store.Querier) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	adminSvc := service.NewAdminParameterService(db, nil, nil)
 	h := NewAdminHandler(adminSvc, noop.NewTracerProvider().Tracer(""), zerolog.Nop(), nil)
 	r := gin.New()
-	r.POST("/admin/v1/params", h.Create)
+	r.POST("/admin/v1/params/wf-create", h.WfCreate)
 	return r
 }
 
@@ -88,7 +91,7 @@ func TestCreateParameter_ValidValuePasses(t *testing.T) {
 	req := newParamCreateRequest(t, `{"transaction_limit":100000000,"authorization_limit":25000000,"currency":"IDR"}`)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusCreated, w.Code)
+	assert.Equal(t, http.StatusOK, w.Code)
 }
 
 func TestCreateParameter_XRuleViolationRejected(t *testing.T) {

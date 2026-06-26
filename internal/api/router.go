@@ -10,7 +10,6 @@ import (
 	"github.com/ihsansolusi/lib7-service-go/middleware"
 	"github.com/ihsansolusi/lib7-service-go/token"
 	"github.com/ihsansolusi/policy7/internal/service"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
@@ -76,85 +75,42 @@ func SetupRoutes(
 	handler := NewParameterHandler(svc, tracer, logger)
 	adminHandler := NewAdminHandler(adminSvc, tracer, logger, audit7Client)
 	categoryHandler := NewCategoryHandler(adminSvc, tracer, logger, audit7Client)
-	contractHandler := NewContractHandler(tracer, logger)
-
-	// Usage telemetry for deprecation-candidate endpoints (routes a 2026-06
-	// review found to have no in-tree caller), labelled by calling service, to
-	// inform their retirement (docs/ROADMAP.md). nil in tests (no metrics
-	// registry) → trackUsage middleware is a no-op.
-	var usageCounter *prometheus.CounterVec
-	if metricsReg != nil {
-		usageCounter = metrics.NewBusiness(metricsReg).RegisterCounter(
-			"policy7_endpoint_usage_total",
-			"Requests to deprecation-candidate endpoints, by route and calling service",
-			[]string{"route", "caller"},
-		)
-	}
 
 	// Auth middleware applied to all /v1 and /admin/v1 endpoints:
 	// bearer JWT (auth7-issued) OR X-Service-Key (BFF/M2M bypass).
 	authMW := middleware.Auth(tokenMaker, serviceKeyValidator())
 
+	// API surface follows the target contract (docs/specs/06-api-grouping.md).
+	// The hardcoded-per-category /v1 reads, the facade /v1/contracts/*, and the
+	// direct non-workflow admin CRUD were retired (Fase 2–4, 2026-06-26) — they
+	// had no in-tree caller and don't fit the data-driven category model.
 	v1 := r.Group("/v1")
 	v1.Use(authMW)
 	v1.Use(middleware.RequireDelegatedOrM2M())
 	{
-		// ACTIVE (Grup 2, generic inquiry — docs/specs/06-api-grouping.md).
-		// The rest of /v1 are deprecation candidates wrapped with trackUsage.
-		v1.GET("/params/:category/:name/effective", handler.GetEffectiveParameter)
-		v1.POST("/params/resolve", handler.ResolveBatch) // batch resolve
-		v1.GET("/params", handler.Snapshot)              // category snapshot
-
-		// Basic REST API for parameters (superseded by .../effective).
-		v1.GET("/params/:category/:name", trackUsage(usageCounter), handler.GetParameter)
-		v1.POST("/params/transaction_limit/validate", trackUsage(usageCounter), handler.ValidateTransactionLimit)
-		v1.GET("/params/approval-thresholds", trackUsage(usageCounter), handler.GetApprovalThresholds)
-		v1.GET("/params/operational-hours", trackUsage(usageCounter), handler.GetOperationalHours)
-		v1.GET("/params/product-access", trackUsage(usageCounter), handler.GetProductAccess)
-
-		// Plan 04 Category Endpoints. rates/fees are compatibility-only;
-		// regulatory + authorization_limit/check have no known caller.
-		v1.GET("/params/rates/:product", trackUsage(usageCounter), handler.GetRates)
-		v1.GET("/params/fees/:product", trackUsage(usageCounter), handler.GetFees)
-		v1.GET("/params/regulatory/:type", trackUsage(usageCounter), handler.GetRegulatory)
-		v1.POST("/params/regulatory/:type/check", trackUsage(usageCounter), handler.CheckRegulatory)
-		v1.POST("/params/authorization_limit/check", trackUsage(usageCounter), handler.CheckAuthorizationLimit)
-
-		// Facade-era contract endpoints — facade retired; BFF allowlist blocks
-		// /v1/contracts/*. Tracked to confirm no out-of-tree caller before drop.
-		v1.GET("/contracts/categories", trackUsage(usageCounter), contractHandler.Categories)
-		v1.GET("/contracts/caller-context", trackUsage(usageCounter), contractHandler.CallerContext)
-		v1.GET("/contracts/errors", trackUsage(usageCounter), contractHandler.Errors)
+		// Grup 2 — generic inquiry (category-agnostic).
+		v1.GET("/params/:category/:name/effective", handler.GetEffectiveParameter) // resolve one
+		v1.POST("/params/resolve", handler.ResolveBatch)                           // resolve many (batch)
+		v1.GET("/params", handler.Snapshot)                                        // category snapshot
+		// Decision helper — two-limit semantics (kept; not expressible via x-rules).
+		v1.POST("/params/transaction_limit/validate", handler.ValidateTransactionLimit)
 	}
 
 	adminV1 := r.Group("/admin/v1")
 	adminV1.Use(authMW)
 	adminV1.Use(middleware.RequireDelegatedOrM2M())
 	{
-		// ACTIVE reads (BFF list/detail/history + bulk-import).
+		// Grup 1 — management reads (BFF) + bulk-import. Mutations go through
+		// the wf-* approval callbacks below, not direct CRUD.
 		adminV1.GET("/params", adminHandler.List)
 		adminV1.GET("/params/:id", adminHandler.GetByID)
 		adminV1.POST("/params/bulk-import", adminHandler.BulkImport)
 		adminV1.GET("/params/:id/history", adminHandler.GetHistory)
 
-		// Direct (non-workflow) param CRUD — superseded by the wf-* approval
-		// flow (BFF → workflow7 → wf-create/update/delete). Tracked to confirm
-		// no caller before retirement (docs/ROADMAP.md).
-		adminV1.POST("/params", trackUsage(usageCounter), adminHandler.Create)
-		adminV1.POST("/params/query", trackUsage(usageCounter), adminHandler.ParamsQuery)
-		adminV1.PUT("/params/:id", trackUsage(usageCounter), adminHandler.Update)
-		adminV1.DELETE("/params/:id", trackUsage(usageCounter), adminHandler.Delete)
-
-		// Wave C — category metadata (value_schema + x-ui/x-rules).
-		// GET endpoints (ACTIVE) drive the dynamic value-form renderer.
+		// Wave C — category metadata (value_schema + x-ui/x-rules) reads drive
+		// the dynamic value-form renderer.
 		adminV1.GET("/categories", categoryHandler.List)
 		adminV1.GET("/categories/:code", categoryHandler.GetByCode)
-
-		// Direct (non-workflow) category CRUD — superseded by the category
-		// wf-* approval flow. Tracked before retirement.
-		adminV1.POST("/categories", trackUsage(usageCounter), categoryHandler.Create)
-		adminV1.PUT("/categories/:code", trackUsage(usageCounter), categoryHandler.Update)
-		adminV1.DELETE("/categories/:code", trackUsage(usageCounter), categoryHandler.Delete)
 
 		// Workflow7 approval callbacks — restricted to M2M callers (workflow7)
 		// and require a valid audit signature. Middleware applied at GROUP level.

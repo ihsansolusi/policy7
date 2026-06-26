@@ -286,7 +286,7 @@ func (s *ParameterService) WarmUpCache(ctx context.Context) error {
 		Limit:  1000,
 		Offset: 0,
 	})
-	
+
 	// Wait, ListParameters requires an OrgID. We should probably only warm up
 	// when requested for a specific org, or we create a new query for all active params.
 	// For simplicity, let's just create a dummy log if we can't fetch all.
@@ -299,7 +299,7 @@ func (s *ParameterService) WarmUpCache(ctx context.Context) error {
 		if !p.IsActive {
 			continue
 		}
-		
+
 		appliesToIDStr := "null"
 		if p.AppliesToID.Valid {
 			appliesToIDStr = p.AppliesToID.String
@@ -308,18 +308,18 @@ func (s *ParameterService) WarmUpCache(ctx context.Context) error {
 		if p.Product.Valid {
 			productStr = p.Product.String
 		}
-		
+
 		orgIDBytes := p.OrgID.Bytes
 		orgID, _ := uuid.FromBytes(orgIDBytes[:])
 
 		cacheKey := fmt.Sprintf("policy7:%s:%s:%s:%s:%s:%s", orgID.String(), p.Category, p.Name, p.AppliesTo, appliesToIDStr, productStr)
-		
+
 		data, _ := json.Marshal(p)
 		ttl := 5 * time.Minute
 		if p.Category == "rates" {
 			ttl = 1 * time.Hour
 		}
-		
+
 		_ = s.cache.Set(ctx, cacheKey, data, ttl)
 		count++
 	}

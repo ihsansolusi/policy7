@@ -40,33 +40,6 @@ func (m *mockQuerier) GetParameter(ctx context.Context, arg store.GetParameterPa
 	}, nil
 }
 
-func TestGetParameter(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	// Setup service with mock DB and nil cache
-	db := &mockQuerier{}
-	svc := service.NewParameterService(db, nil, nil)
-	adminSvc := service.NewAdminParameterService(db, nil, nil)
-
-	r := gin.Default()
-	SetupRoutes(r, svc, adminSvc, nil, zerolog.Nop(), nil, nil)
-
-	req, _ := http.NewRequest(http.MethodGet, "/v1/params/transaction_limit/teller_transfer_max", nil)
-	// Add required header
-	req.Header.Set("X-Org-ID", uuid.New().String())
-	req.Header.Set("X-Service-Key", "test-service-key")
-	req.Header.Set("X-Service-ID", "test")
-	req.Header.Set("X-API-Key", "test-key")
-	
-	w := httptest.NewRecorder()
-
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("Expected status code 200, got %v", w.Code)
-	}
-}
-
 // postParam issues an authenticated POST to the given path and returns the
 // decoded `data` envelope on a 200, failing the test otherwise.
 func postParam(t *testing.T, r http.Handler, path string, body map[string]interface{}) map[string]interface{} {
@@ -167,50 +140,6 @@ func TestValidateTransactionLimit(t *testing.T) {
 			}
 		})
 	}
-}
-
-// The mock authorization_limit value is {limit_amount:50000000}.
-func TestCheckAuthorizationLimit(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	db := &mockQuerier{}
-	svc := service.NewParameterService(db, nil, nil)
-	adminSvc := service.NewAdminParameterService(db, nil, nil)
-
-	r := gin.Default()
-	SetupRoutes(r, svc, adminSvc, nil, zerolog.Nop(), nil, nil)
-
-	t.Run("allowed", func(t *testing.T) {
-		data := postParam(t, r, "/v1/params/authorization_limit/check", map[string]interface{}{
-			"role_id": "spv",
-			"amount":  30000000,
-		})
-		if got := data["allowed"].(bool); !got {
-			t.Errorf("allowed = false, want true")
-		}
-		if got := data["approver_limit"].(float64); got != 50000000 {
-			t.Errorf("approver_limit = %v, want 50000000", got)
-		}
-		if got := data["remaining"].(float64); got != 20000000 {
-			t.Errorf("remaining = %v, want 20000000", got)
-		}
-	})
-
-	t.Run("exceeded", func(t *testing.T) {
-		data := postParam(t, r, "/v1/params/authorization_limit/check", map[string]interface{}{
-			"approver_role": "spv",
-			"amount":        75000000,
-		})
-		if got := data["allowed"].(bool); got {
-			t.Errorf("allowed = true, want false")
-		}
-		if got := data["exceeded_by"].(float64); got != 25000000 {
-			t.Errorf("exceeded_by = %v, want 25000000", got)
-		}
-		if got := data["escalation_required"].(bool); !got {
-			t.Errorf("escalation_required = false, want true")
-		}
-	})
 }
 
 func TestMain(m *testing.M) {

@@ -5,11 +5,12 @@ Diperbarui 2026-06-26.
 
 ## ✅ Sudah diimplementasi
 
-- **Consumer API `/v1`** — query parameter, effective resolution, two-limit validate,
-  authorization-limit check, approval thresholds, operational hours, product access, rates,
-  fees, regulatory check, contracts metadata.
-- **Admin API `/admin/v1`** — CRUD parameter, history, bulk-import, DataTable query; CRUD
-  kategori (data-driven `value_schema`).
+- **Consumer API `/v1`** (Grup 2, generic) — effective resolution, batch resolve, category
+  snapshot, two-limit validate (decision helper). *(Endpoint hardcoded-per-kategori lama sudah
+  diretire — lihat migrasi API di bawah.)*
+- **Admin API `/admin/v1`** (Grup 1) — parameter reads (list/detail/history) + bulk-import,
+  kategori reads (data-driven `value_schema`); mutasi via `wf-*` approval. *(Direct CRUD sudah
+  diretire.)*
 - **Versioning + audit trail** — `version++` + `is_active`, `parameter_history` dengan
   `change_reason` / before-after.
 - **Resolution / inheritance** — actor-context (`user→role→branch→global`) dan Option C
@@ -31,69 +32,42 @@ Diperbarui 2026-06-26.
 
 ## 🔭 Backlog / belum diimplementasi
 
-### API usage / deprecation candidates
+### API migration → kontrak target (5 grup) — Fase 1–4 SELESAI (2026-06-26)
 
 Review lintas-repo (2026-06-26) menemukan **~separuh surface tidak punya caller in-tree**.
 Consumer runtime nyata: **bos7-enterprise BFF** (reads `/admin/v1` + `/v1/.../effective` +
-bulk-import), **workflow7** (mutasi via `wf-*`), dan **auth7** (sejak #161 `dd7b5fb` —
+bulk-import), **workflow7** (mutasi via `wf-*`), dan **auth7** (#161 `dd7b5fb` —
 `operational_hours` via generic `/v1/params/{category}/{name}/effective` + opacache + NATS,
-**bukan** endpoint hardcoded). auth7-ui / core7-service-* / Go SDK `pkg/client` **tidak**
-memanggil policy7 via HTTP. Penting: auth7 memvalidasi desain Grup 2 — konsumen baru pun
-memilih endpoint generik, bukan yang hardcoded.
+**bukan** endpoint hardcoded). auth7-ui / core7-service-* / Go SDK `pkg/client` tidak memanggil
+policy7 via HTTP. auth7 memvalidasi desain Grup 2 — consumer baru pun memilih endpoint generik.
 
-✅ **Telemetry terpasang** (2026-06-26): counter `policy7_endpoint_usage_total{route, caller}`
-di `/metrics` (`internal/api/usage_metrics.go`, middleware `trackUsage`) mencatat siapa
-(M2M `client_id` / delegated `act.sub` / `system` / `user`) yang memukul tiap
-deprecation-candidate. **Next:** amati di lingkungan nyata → hapus route+handler yang 0 caller.
+Karena temuan ini design-justified (endpoint hardcoded-per-kategori struktural tak cocok dengan
+kategori data-driven) + 0 in-tree caller, retirement dieksekusi langsung (Fase 2+4 digabung),
+bukan via observasi telemetry. Mengikuti [docs/specs/06-api-grouping.md](specs/06-api-grouping.md).
 
-Endpoint yang di-track (kandidat retire):
+- **Fase 1 — Inquiry generik (additive)** ✅: `POST /v1/params/resolve` (batch) +
+  `GET /v1/params?category=…` (snapshot) di `internal/api/inquiry_handler.go` +
+  `ParameterService.SnapshotByCategory`.
+- **Fase 2 — Deprecate hardcoded `/v1`** ✅ (digabung ke Fase 4): transitional telemetry
+  (`policy7_endpoint_usage_total` / `trackUsage`) sempat dipasang lalu **dihapus** bersama
+  endpoint-nya.
+- **Fase 3 — Retire direct admin CRUD** ✅: hapus `POST/PUT/DELETE /admin/v1/params` &
+  `/categories` + `POST /params/query` (handler + route). Semua mutasi lewat `wf-*`. Validasi
+  (`validateScopeContext` + service category/value_schema gate) tetap utuh di jalur `wf-*`;
+  test validasi dipindah ke `WfCreate`.
+- **Fase 4 — Hapus `/v1` hardcoded + `/contracts/*` + handler mati** ✅: dihapus
+  `GetParameter`(basic)/`GetRates`/`GetFees`/`GetRegulatory`/`CheckRegulatory`/
+  `CheckAuthorizationLimit`/`GetApprovalThresholds`/`GetOperationalHours`/`GetProductAccess` +
+  `contract_handler.go` + `usage_metrics.go`. Pertahankan `…/effective` +
+  `transaction_limit/validate` (decision helper).
 
-| Grup | Endpoint | Catatan |
-|---|---|---|
-| legacy | `GET /v1/params/rates/:product` · `/fees/:product` | compatibility-only |
-| /v1 basic | `GET /v1/params/:category/:name` | tersuperseded `…/effective` |
-| /v1 boundary | `GET /v1/params/operational-hours` · `/product-access` | hardcoded; **0 caller** — auth7 #161 justru pakai generic `…/effective` untuk operational_hours, bukan endpoint ini |
-| /v1 boundary | `GET /v1/params/approval-thresholds` | tak ada caller |
-| /v1 | `GET /v1/params/regulatory/:type` · `POST …/regulatory/:type/check` | tak ada caller (SDK wrap, 0 importer) |
-| /v1 | `POST /v1/params/transaction_limit/validate` · `…/authorization_limit/check` | simulator pakai `/effective` |
-| /v1 facade | `GET /v1/contracts/categories` · `/caller-context` · `/errors` | facade retired; BFF allowlist memblok `/v1/contracts/*` |
-| admin direct | `POST /admin/v1/params` · `PUT/DELETE …/:id` · `POST …/query` | tersuperseded alur `wf-*` (approval) |
-| admin direct | `POST /admin/v1/categories` · `PUT/DELETE …/:code` | tersuperseded alur category `wf-*` |
+**Surface akhir:** Grup 1 (`/admin/v1` reads + bulk-import + `wf-*`) · Grup 2
+(`/effective`, `resolve`, snapshot, `transaction_limit/validate`) · Grup 3 (`/admin/v1/categories`
+reads) · Grup 4 (NATS) · Grup 5 (`/health`, `/metrics`). Lihat [03-api](specs/03-api.md).
 
-> **Tidak** di-track (aktif dipakai): `/admin/v1/params` GET·`:id`·`:id/history`, `bulk-import`,
-> `/admin/v1/categories` GET·`:code`, semua `wf-*`, `/v1/params/:category/:name/effective`.
-
-**Go SDK `pkg/client`** (membungkus 4 method: ValidateTransactionLimit, GetEffectiveParameter,
-CheckRegulatoryThreshold, CheckAuthorizationLimit) punya **0 importer** di ekosistem →
-kandidat hapus. Service yang dulu diharapkan memakainya tidak memanggil policy7 sama sekali.
-
-### Rencana migrasi API → kontrak target (5 grup)
-
-Mengikuti [docs/specs/06-api-grouping.md](specs/06-api-grouping.md). Bertahap, tiap fase
-aman & independen. Telemetry `policy7_endpoint_usage_total` jadi safety-net saat memotong.
-
-- **Fase 1 — Inquiry generik (additive, no breaking).** ✅ **Sebagian (2026-06-26):**
-  `POST /v1/params/resolve` (batch) + `GET /v1/params?category=…` (snapshot effective)
-  ditambah di `internal/api/inquiry_handler.go` (+ `ParameterService.SnapshotByCategory`),
-  tidak menghapus apa pun. **Sisa:** update/retire `pkg/client` (`Resolve`/`BatchResolve`)
-  — ditunda (0 importer). Output: konsumen punya satu cara generik untuk semua kategori
-  (termasuk kategori baru buatan admin).
-- **Fase 2 — Deprecate hardcoded `/v1`.** Tandai `operational-hours`, `product-access`,
-  `approval-thresholds`, `rates/:product`, `fees/:product`, `regulatory/:type`,
-  `GET /params/:category/:name` (basic), `authorization_limit/check`, `regulatory/:type/check`
-  sebagai deprecated (header `Deprecation` + log WARN). Pantau `policy7_endpoint_usage_total`
-  ~1–2 rilis. Pertahankan `…/effective` + `transaction_limit/validate` (decision helper).
-- **Fase 3 — Retire direct admin CRUD.** Hapus `POST/PUT/DELETE /admin/v1/params` &
-  `/categories` + `POST /params/query` setelah konfirmasi 0 caller (semua mutasi sudah lewat
-  `wf-*`). Handler & route dihapus.
-- **Fase 4 — Hapus `/v1` hardcoded + `/contracts/*` + handler mati.** Setelah Fase 2 dry,
-  hapus route + handler (`GetRates`/`GetFees`/`GetOperationalHours`/…/`contract_handler.go`).
-- **Fase 5 — Discovery + SDK.** Putuskan expose `value_schema` read di `/v1` (untuk consumer
-  generik) atau cukup `/admin/v1`. Hapus `pkg/client` bila tetap 0 importer, atau align ke
-  Grup 2.
-
-Setiap fase: `make test` + build hijau, dan (Fase 3–4) verifikasi `policy7_endpoint_usage_total`
-= 0 untuk route bersangkutan sebelum hapus.
+- **Fase 5 — Discovery + SDK** (sisa): putuskan expose `value_schema` read di `/v1` untuk
+  consumer generik (saat ini hanya `/admin/v1`); **hapus `pkg/client` Go SDK** (4 method, 0
+  importer) atau align ke Grup 2 (`Resolve`/`BatchResolve`) bila nanti dipakai.
 
 ### Cross-stream dependency
 - Canonical role identifier (`role_id` vs `role_code`) masih bergantung pada auth7.
