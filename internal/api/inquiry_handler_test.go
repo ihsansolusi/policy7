@@ -42,6 +42,12 @@ func (m *inqMock) ListParametersFiltered(ctx context.Context, arg store.ListPara
 	}, nil
 }
 
+func (m *inqMock) ListParameterCategories(ctx context.Context, orgID pgtype.UUID) ([]store.ParameterCategory, error) {
+	return []store.ParameterCategory{
+		{Code: "rate", Name: "Rates", ValueSchema: json.RawMessage(`{"type":"object","properties":{"rate":{"type":"number"}}}`), IsActive: true, DisplayOrder: 1},
+	}, nil
+}
+
 func newInquiryRouter() http.Handler {
 	gin.SetMode(gin.TestMode)
 	db := &inqMock{}
@@ -144,3 +150,27 @@ func TestSnapshotRequiresCategory(t *testing.T) {
 
 // keep pgtype import used (mirrors store param construction elsewhere).
 var _ = pgtype.Text{}
+
+func TestV1CategoriesDiscovery(t *testing.T) {
+	r := newInquiryRouter()
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, authReq(http.MethodGet, "/v1/categories", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var res struct {
+		Data []struct {
+			Code        string          `json:"code"`
+			ValueSchema json.RawMessage `json:"value_schema"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
+		t.Fatalf("decode: %v (%s)", err, w.Body.String())
+	}
+	if len(res.Data) != 1 || res.Data[0].Code != "rate" {
+		t.Fatalf("unexpected categories: %+v", res.Data)
+	}
+	if len(res.Data[0].ValueSchema) == 0 || string(res.Data[0].ValueSchema) == "null" {
+		t.Errorf("discovery must surface value_schema; got %s", res.Data[0].ValueSchema)
+	}
+}

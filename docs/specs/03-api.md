@@ -26,6 +26,15 @@ Auth (lihat [05-security](05-security.md)):
 > `authorization_limit/check`, basic `GET /params/:category/:name`) dan facade
 > `/contracts/*` **sudah dihapus** (Fase 2–4) — digantikan `resolve`/`snapshot` generik.
 
+### Discovery — `/v1` (Grup 3)
+
+Read-only metadata kategori + `value_schema` agar consumer (atau tooling) bisa menafsirkan
+bentuk `value` secara generik. Handler sama dgn `/admin/v1/categories`, dimount read-only.
+
+| Method | Path | Fungsi |
+|---|---|---|
+| GET | `/categories` · `/categories/:code` | metadata kategori + `value_schema` (+ `x-ui`/`x-rules`) |
+
 ## Admin API — `/admin/v1` (Grup 1: management)
 
 **Parameters** — reads + bulk-import; mutasi lewat `wf-*` (bukan direct CRUD).

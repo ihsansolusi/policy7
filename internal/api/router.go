@@ -94,6 +94,12 @@ func SetupRoutes(
 		v1.GET("/params", handler.Snapshot)                                        // category snapshot
 		// Decision helper — two-limit semantics (kept; not expressible via x-rules).
 		v1.POST("/params/transaction_limit/validate", handler.ValidateTransactionLimit)
+
+		// Grup 3 — discovery: read category metadata + value_schema so consumers
+		// (and tooling) can interpret a parameter's value shape generically. Same
+		// read handlers as /admin/v1, exposed read-only here.
+		v1.GET("/categories", categoryHandler.List)
+		v1.GET("/categories/:code", categoryHandler.GetByCode)
 	}
 
 	adminV1 := r.Group("/admin/v1")

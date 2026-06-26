@@ -82,11 +82,12 @@ Pemakai: form dinamis bos7-enterprise + tooling/consumer yang menafsirkan value 
 
 | Endpoint | Untuk |
 |---|---|
-| `GET /categories` + `/categories/:code` (baca `value_schema` + `x-ui`/`x-rules`) | render form dinamis; introspeksi bentuk value |
+| `GET /admin/v1/categories` + `/:code` | admin form dinamis (manajemen kategori) |
+| `GET /v1/categories` + `/:code` ✅ | consumer/tooling: introspeksi bentuk value generik |
 
-Saat ini di `/admin/v1/categories`. Bila ada consumer non-admin yang perlu bentuk value,
-expose **read** value_schema juga di `/v1`. `/v1/contracts/*` lama adalah versi gagal dari
-ide ini (terkopling facade) → dibuang.
+Read `value_schema` (+ `x-ui`/`x-rules`) kini tersedia di **kedua** plane: `/admin/v1` (admin
+UI) dan `/v1` (consumer generik — handler read-only yang sama). `/v1/contracts/*` lama adalah
+versi gagal dari ide ini (terkopling facade) → sudah dibuang.
 
 ### Grup 4 — Events / Subscription (NATS)
 Plane **push**, bukan REST — sudah hidup & dipakai. Subjects

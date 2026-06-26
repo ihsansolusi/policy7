@@ -55,33 +55,24 @@ design-justified (endpoint hardcoded-per-kategori tak cocok dengan kategori data
 `resolve`, snapshot, `transaction_limit/validate`) · Grup 3 (`/admin/v1/categories` reads) ·
 Grup 4 (NATS) · Grup 5 (`/health`, `/metrics`). Lihat [03-api](specs/03-api.md).
 
+## ✅ Selesai belakangan (2026-06-26)
+- **Grup 3 discovery** — `GET /v1/categories` (+ `/:code`) read-only `value_schema` untuk
+  consumer/tooling generik (handler sama dgn `/admin/v1`, read-only). Tersedia di kedua plane.
+- **#587 full-chain version history** (backend) — `GET /admin/v1/params/:id/history` balas
+  rantai versi penuh: group semua row yang berbagi identity tuple `(org_id, category, name,
+  applies_to, applies_to_id, product)`. Query `GetParameterHistoryByIdentity` (generated).
+  Divalidasi vs DB nyata (EXPLAIN + 3-versi rollback: chain=3 vs per-id=1).
+- **#588 bulk-import per-row errors** (backend) — `POST /admin/v1/params/bulk-import` best-effort
+  per-row → `{summary, results:[{row,status,code,error|id}]}`; validasi per-row = jalur single/wf.
+- **sqlc drift reconciled** — enum overrides di `sqlc.yaml`; codegen kini bersih/idempotent.
+
 ## 🔭 Backlog / belum diimplementasi
 
-### Discovery `value_schema` read di `/v1` (Grup 3) — ditunda (YAGNI)
-- Saat ini `value_schema` hanya dibaca via `/admin/v1/categories`. Bila muncul consumer
-  **non-admin** yang perlu menafsirkan bentuk value secara generik, expose read-only di `/v1`.
-  Belum dibangun karena belum ada pemakainya (auth7 sudah tahu shape param yang dikonsumsi).
+### UI surfacing (cross-repo — bos7-enterprise, bukan backend policy7)
+- **#587** — UI `VersionHistory` konsumsi full-chain (#585).
+- **#588** — tampilkan detail error per-row di surface bulk-import.
 
-### Follow-up Policy Management (non-blocking, di devroot #401)
-- ✅ **#587** — full-chain version history **DONE** (2026-06-26): `GET /admin/v1/params/:id/history`
-  kini mengembalikan rantai versi penuh dgn mengelompokkan semua row yang berbagi identity
-  tuple `(org_id, category, name, applies_to, applies_to_id, product)` — tiap versi adalah row
-  terpisah (own id). Query `GetParameterHistoryByIdentity` (hand-written di
-  `internal/store/param_history_chain.go` krn sqlc output drift dari schema). Divalidasi vs DB
-  nyata (EXPLAIN + 3-versi rollback proof: chain=3 vs per-id=1). UI `VersionHistory` (#585)
-  tinggal konsumsi.
-- ✅ **#588** — bulk-import per-row error detail **DONE** (2026-06-26): `POST
-  /admin/v1/params/bulk-import` kini best-effort per-row, balas
-  `{summary:{success_count,failed_count,total_count}, results:[{row,status,code,error|id}]}`.
-  Validasi per-row sama dgn jalur single/wf (scope + category + value_schema). Sisa: surface
-  detail ini di UI bos7-enterprise.
-
-> #577 (SSE tracker race) bukan backend policy7 — murni FE bos7-enterprise
-> (`useWorkflowTracker`); dilacak di devroot#401, tidak di ROADMAP ini.
-
-### DEF / migration (low priority)
-- Nama auto-index `org_id` berbeda dari deployment lama (`idx_parameters_org_id` vs
-  `idx_parameters_org`) — kosmetik.
+> #577 (SSE tracker race) = FE bos7-enterprise (`useWorkflowTracker`); devroot#401.
 
 ### Potensi v2
 - gRPC untuk query low-latency.
@@ -92,12 +83,14 @@ Grup 4 (NATS) · Grup 5 (`/health`, `/metrics`). Lihat [03-api](specs/03-api.md)
 ## Keputusan desain (bukan backlog)
 - **Tanpa soft-delete `FwRelation`** — sengaja tetap entitas `{}` polos; tak ada
   `deleted_at/by` di produksi.
-- **Discovery `value_schema` hanya di `/admin/v1`** untuk sekarang — lihat backlog di atas.
 - **`validateCategoryContext` product-rule untuk transaction_limit DIHAPUS** (#579) — validitas
   kini murni data-driven via `value_schema`; seed tak perlu bypass lagi.
 - **Identifier role = `role_code` (string), bukan UUID** — konvergen dgn auth7 (klaim JWT
   `Roles` = kode via `GetRoleCodesByUser`; policy7 `applies_to_id` role = kode). Verified
   2026-06-26; bukan lagi dependency terbuka.
+- **Index auto-name `idx_parameters_org_id`** — konsisten antara migration & DB (pasca
+  rebaseline). Nama lama `idx_parameters_org` sudah tak relevan; nama generator dipertahankan
+  (jangan rename — selaras DEF auto-naming). Bukan backlog.
 
 > Konteks historis (Plan 07/12/13, planning issues) dipindah ke
 > `_backup/policy7-cleanup-20260626/` di root devroot saat cleanup dokumentasi 2026-06-26.
