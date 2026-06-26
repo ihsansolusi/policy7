@@ -1,4 +1,9 @@
-# 03 — API
+# 03 — API (as-built)
+
+Referensi endpoint **yang ada saat ini**. Untuk arah/kontrak target (pengelompokan
+generik + apa yang di-deprecate) lihat [06-api-grouping](06-api-grouping.md). Kolom
+**Status**: ✅ aktif dipakai · ⚠️ deprecation-candidate (di-track `trackUsage`, akan
+di-collapse/retire) · lihat [ROADMAP](../ROADMAP.md).
 
 Semua endpoint internal-only. Error envelope seragam:
 `{ code, message, http_status, retryable, details, trace_id }`.
@@ -11,20 +16,25 @@ Auth (lihat [05-security](05-security.md)):
 
 ## Consumer API — `/v1`
 
-| Method | Path | Fungsi |
-|---|---|---|
-| GET | `/params/:category/:name` | ambil parameter (versi aktif) |
-| GET | `/params/:category/:name/effective` | resolusi efektif (inheritance) |
-| POST | `/params/transaction_limit/validate` | two-limit decision (AUTO/REQUIRES/REJECTED) |
-| POST | `/params/authorization_limit/check` | cek kapasitas approver |
-| GET | `/params/approval-thresholds` | ambang approval |
-| GET | `/params/operational-hours` | jam operasional (input ABAC auth7) |
-| GET | `/params/product-access` | aturan akses produk (input ABAC auth7) |
-| GET | `/params/rates/:product` | bunga per produk — **compatibility-only**, lihat telemetry di bawah |
-| GET | `/params/fees/:product` | biaya per produk — **compatibility-only** |
-| GET | `/params/regulatory/:type` | ambang regulator (CTR/STR) |
-| POST | `/params/regulatory/:type/check` | cek apakah transaksi lewat ambang |
-| GET | `/contracts/categories` · `/contracts/caller-context` · `/contracts/errors` | metadata self-describing API |
+| Method | Path | Fungsi | Status |
+|---|---|---|---|
+| GET | `/params/:category/:name/effective` | resolusi efektif (inheritance) | ✅ aktif (BFF simulator) |
+| GET | `/params/:category/:name` | ambil parameter (versi aktif, tanpa resolusi) | ⚠️ → pakai `/effective` |
+| POST | `/params/transaction_limit/validate` | two-limit decision (AUTO/REQUIRES/REJECTED) | ⚠️ decision-helper (lihat 06) |
+| POST | `/params/authorization_limit/check` | cek kapasitas approver | ⚠️ tak ada caller |
+| GET | `/params/approval-thresholds` | ambang approval | ⚠️ → generic resolve |
+| GET | `/params/operational-hours` | jam operasional (rencana input ABAC auth7 — tak pernah dipakai) | ⚠️ → generic resolve |
+| GET | `/params/product-access` | aturan akses produk (idem) | ⚠️ → generic resolve |
+| GET | `/params/rates/:product` | bunga per produk | ⚠️ compatibility-only |
+| GET | `/params/fees/:product` | biaya per produk | ⚠️ compatibility-only |
+| GET | `/params/regulatory/:type` | ambang regulator (CTR/STR) | ⚠️ → generic resolve |
+| POST | `/params/regulatory/:type/check` | cek apakah transaksi lewat ambang | ⚠️ tak ada caller |
+| GET | `/contracts/categories` · `/contracts/caller-context` · `/contracts/errors` | metadata self-describing API (facade-era) | ⚠️ facade retired; BFF blokir |
+
+> Semua baris ⚠️ adalah desain **hardcoded-per-kategori** yang tidak cocok dengan kategori
+> data-driven. Di [06-api-grouping](06-api-grouping.md) digantikan oleh `resolve`
+> (single/batch) + `snapshot` generik. `/v1/.../effective` adalah satu-satunya yang sudah
+> sesuai pola target.
 
 > **Usage telemetry.** Endpoint kandidat retire (rates/fees, basic get, boundary reads,
 > regulatory, validate/check, `/contracts/*`, dan direct non-`wf` admin CRUD) dibungkus
@@ -38,25 +48,25 @@ Auth (lihat [05-security](05-security.md)):
 
 **Parameters**
 
-| Method | Path | Fungsi |
-|---|---|---|
-| GET | `/params` | list |
-| GET | `/params/:id` | detail |
-| POST | `/params` | create |
-| PUT | `/params/:id` | update (versioning) |
-| DELETE | `/params/:id` | soft delete |
-| POST | `/params/bulk-import` | import massal (error per-row) |
-| POST | `/params/query` | DataTable query (filter/scope) |
-| GET | `/params/:id/history` | riwayat versi |
+| Method | Path | Fungsi | Status |
+|---|---|---|---|
+| GET | `/params` | list | ✅ aktif (BFF) |
+| GET | `/params/:id` | detail | ✅ aktif (BFF) |
+| GET | `/params/:id/history` | riwayat versi | ✅ aktif (BFF) |
+| POST | `/params/bulk-import` | import massal (error per-row) | ✅ aktif (BFF) |
+| POST | `/params` | create | ⚠️ direct CRUD → pakai `wf-create` |
+| PUT | `/params/:id` | update (versioning) | ⚠️ direct CRUD → pakai `wf-update` |
+| DELETE | `/params/:id` | soft delete | ⚠️ direct CRUD → pakai `wf-delete` |
+| POST | `/params/query` | DataTable query (filter/scope) | ⚠️ tak ada caller |
 
 **Categories** (Wave C — data-driven `value_schema`)
 
-| Method | Path |
-|---|---|
-| GET | `/categories` · `/categories/:code` |
-| POST | `/categories` |
-| PUT | `/categories/:code` |
-| DELETE | `/categories/:code` |
+| Method | Path | Status |
+|---|---|---|
+| GET | `/categories` · `/categories/:code` | ✅ aktif (BFF + form dinamis) |
+| POST | `/categories` | ⚠️ direct CRUD → pakai `categories/wf-create` |
+| PUT | `/categories/:code` | ⚠️ direct CRUD → pakai `wf-update` |
+| DELETE | `/categories/:code` | ⚠️ direct CRUD → pakai `wf-delete` |
 
 ## Workflow callbacks — `/admin/v1/.../wf-*`
 

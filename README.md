@@ -90,8 +90,9 @@ keamanan: [`docs/specs/05-security.md`](docs/specs/05-security.md).
 
 ## Dokumentasi
 
-- [`docs/specs/`](docs/specs/) — spesifikasi teknis (overview, arsitektur, data model, API,
-  integrasi, security). Index: [`docs/specs/README.md`](docs/specs/README.md).
+- [`docs/specs/`](docs/specs/) — spesifikasi teknis (overview, arsitektur, data model, API
+  as-built, integrasi, security, **kontrak API target**). Index:
+  [`docs/specs/README.md`](docs/specs/README.md).
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — yang sudah diimplementasi vs yang masih backlog.
 
 > Panduan kerja AI/Claude memakai `CLAUDE.md` di root devroot, bukan di submodule ini.

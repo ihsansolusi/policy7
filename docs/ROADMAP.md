@@ -64,6 +64,32 @@ Endpoint yang di-track (kandidat retire):
 CheckRegulatoryThreshold, CheckAuthorizationLimit) punya **0 importer** di ekosistem →
 kandidat hapus. Service yang dulu diharapkan memakainya tidak memanggil policy7 sama sekali.
 
+### Rencana migrasi API → kontrak target (5 grup)
+
+Mengikuti [docs/specs/06-api-grouping.md](specs/06-api-grouping.md). Bertahap, tiap fase
+aman & independen. Telemetry `policy7_endpoint_usage_total` jadi safety-net saat memotong.
+
+- **Fase 1 — Inquiry generik (additive, no breaking).** Tambah `POST /v1/params/resolve`
+  (batch) + `GET /v1/params?category=…` (snapshot effective). Tidak menghapus apa pun.
+  Update `pkg/client` (bila dipertahankan) → `Resolve` / `BatchResolve`. Output: konsumen
+  punya satu cara generik untuk semua kategori (termasuk kategori baru buatan admin).
+- **Fase 2 — Deprecate hardcoded `/v1`.** Tandai `operational-hours`, `product-access`,
+  `approval-thresholds`, `rates/:product`, `fees/:product`, `regulatory/:type`,
+  `GET /params/:category/:name` (basic), `authorization_limit/check`, `regulatory/:type/check`
+  sebagai deprecated (header `Deprecation` + log WARN). Pantau `policy7_endpoint_usage_total`
+  ~1–2 rilis. Pertahankan `…/effective` + `transaction_limit/validate` (decision helper).
+- **Fase 3 — Retire direct admin CRUD.** Hapus `POST/PUT/DELETE /admin/v1/params` &
+  `/categories` + `POST /params/query` setelah konfirmasi 0 caller (semua mutasi sudah lewat
+  `wf-*`). Handler & route dihapus.
+- **Fase 4 — Hapus `/v1` hardcoded + `/contracts/*` + handler mati.** Setelah Fase 2 dry,
+  hapus route + handler (`GetRates`/`GetFees`/`GetOperationalHours`/…/`contract_handler.go`).
+- **Fase 5 — Discovery + SDK.** Putuskan expose `value_schema` read di `/v1` (untuk consumer
+  generik) atau cukup `/admin/v1`. Hapus `pkg/client` bila tetap 0 importer, atau align ke
+  Grup 2.
+
+Setiap fase: `make test` + build hijau, dan (Fase 3–4) verifikasi `policy7_endpoint_usage_total`
+= 0 untuk route bersangkutan sebelum hapus.
+
 ### Cross-stream dependency
 - Canonical role identifier (`role_id` vs `role_code`) masih bergantung pada auth7.
 
