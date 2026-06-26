@@ -3,10 +3,17 @@
 policy7 adalah produsen parameter; service lain mengkonsumsinya. Semua URL peer lewat
 env var (lihat [05-security](05-security.md)).
 
-## auth7 — ABAC input
+## auth7 — ABAC input (reference Grup-2 consumer)
 
-auth7 OPA/Rego query policy7 untuk **data** parameter (jam operasional, product access)
-saat evaluasi ABAC. policy7 **tidak** menyimpan rule allow/deny — itu tetap di auth7.
+auth7 mengkonsumsi parameter policy7 sebagai **input ABAC** (rule allow/deny tetap di auth7).
+Sejak auth7 #161 (`dd7b5fb`), time-based ABAC mengambil kategori `operational_hours` lewat
+**inquiry generik** — `GET /v1/params/operational_hours/{name}/effective` (Grup 2 kanonik,
+resolusi `user→role→branch→global` di sisi policy7) — bukan endpoint hardcoded
+`/v1/params/operational-hours`. Pola konsumsinya = **cache lokal (opacache) fetch-through saat
+miss + invalidasi via NATS** `policy7.params.*` (Grup 4). auth7 sengaja **tidak** memakai
+`pkg/client` SDK (menulis thin fetcher sendiri). Ini contoh acuan pemakaian Grup 2 + Grup 4
+([06-api-grouping](06-api-grouping.md)).
+
 policy7 juga memvalidasi token JWT auth7 via JWKS (`TOKEN_JWKS`).
 
 ## core7-enterprise — validasi + admin UI

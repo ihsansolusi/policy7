@@ -15,6 +15,13 @@ kategori yang belum ada saat compile — itulah kenapa nyaris tak terpakai.
 > **Aturan:** konsumsi di-key oleh `(category, name)` + konteks resolusi. Semantik
 > per-kategori hidup di `value_schema` / `x-rules`, bukan di routing.
 
+> **Validasi nyata:** auth7 #161 (`dd7b5fb`) — consumer baru pertama setelah review —
+> mengkonsumsi kategori `operational_hours` lewat **generic** `GET
+> /v1/params/operational_hours/{name}/effective` (Grup 2) + cache fetch-through +
+> NATS invalidation (Grup 4), dan **menghindari** SDK + endpoint hardcoded. Yakni
+> tim lain pun, diberi pilihan, memilih pola target. Lihat
+> [04-integration](04-integration.md).
+
 ---
 
 ## Lima grup

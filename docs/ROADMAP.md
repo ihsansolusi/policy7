@@ -34,9 +34,12 @@ Diperbarui 2026-06-26.
 ### API usage / deprecation candidates
 
 Review lintas-repo (2026-06-26) menemukan **~separuh surface tidak punya caller in-tree**.
-Consumer runtime nyata hanya **bos7-enterprise BFF** (reads `/admin/v1` + `/v1/.../effective`
-+ bulk-import) dan **workflow7** (mutasi via `wf-*`). auth7 / auth7-ui / core7-service-* /
-Go SDK `pkg/client` **tidak** memanggil policy7 via HTTP.
+Consumer runtime nyata: **bos7-enterprise BFF** (reads `/admin/v1` + `/v1/.../effective` +
+bulk-import), **workflow7** (mutasi via `wf-*`), dan **auth7** (sejak #161 `dd7b5fb` —
+`operational_hours` via generic `/v1/params/{category}/{name}/effective` + opacache + NATS,
+**bukan** endpoint hardcoded). auth7-ui / core7-service-* / Go SDK `pkg/client` **tidak**
+memanggil policy7 via HTTP. Penting: auth7 memvalidasi desain Grup 2 — konsumen baru pun
+memilih endpoint generik, bukan yang hardcoded.
 
 ✅ **Telemetry terpasang** (2026-06-26): counter `policy7_endpoint_usage_total{route, caller}`
 di `/metrics` (`internal/api/usage_metrics.go`, middleware `trackUsage`) mencatat siapa
@@ -49,7 +52,7 @@ Endpoint yang di-track (kandidat retire):
 |---|---|---|
 | legacy | `GET /v1/params/rates/:product` · `/fees/:product` | compatibility-only |
 | /v1 basic | `GET /v1/params/:category/:name` | tersuperseded `…/effective` |
-| /v1 boundary | `GET /v1/params/operational-hours` · `/product-access` | dirancang utk ABAC auth7 — **auth7 tak pernah implement** (ABAC lokal Postgres) |
+| /v1 boundary | `GET /v1/params/operational-hours` · `/product-access` | hardcoded; **0 caller** — auth7 #161 justru pakai generic `…/effective` untuk operational_hours, bukan endpoint ini |
 | /v1 boundary | `GET /v1/params/approval-thresholds` | tak ada caller |
 | /v1 | `GET /v1/params/regulatory/:type` · `POST …/regulatory/:type/check` | tak ada caller (SDK wrap, 0 importer) |
 | /v1 | `POST /v1/params/transaction_limit/validate` · `…/authorization_limit/check` | simulator pakai `/effective` |

@@ -23,7 +23,7 @@ Auth (lihat [05-security](05-security.md)):
 | POST | `/params/transaction_limit/validate` | two-limit decision (AUTO/REQUIRES/REJECTED) | ⚠️ decision-helper (lihat 06) |
 | POST | `/params/authorization_limit/check` | cek kapasitas approver | ⚠️ tak ada caller |
 | GET | `/params/approval-thresholds` | ambang approval | ⚠️ → generic resolve |
-| GET | `/params/operational-hours` | jam operasional (rencana input ABAC auth7 — tak pernah dipakai) | ⚠️ → generic resolve |
+| GET | `/params/operational-hours` | jam operasional (auth7 #161 pakai generic `…/effective`, bukan endpoint ini) | ⚠️ → generic resolve |
 | GET | `/params/product-access` | aturan akses produk (idem) | ⚠️ → generic resolve |
 | GET | `/params/rates/:product` | bunga per produk | ⚠️ compatibility-only |
 | GET | `/params/fees/:product` | biaya per produk | ⚠️ compatibility-only |
