@@ -34,7 +34,7 @@ Auth (lihat [05-security](05-security.md)):
 |---|---|---|
 | GET | `/params` | list |
 | GET | `/params/:id` | detail |
-| GET | `/params/:id/history` | riwayat versi |
+| GET | `/params/:id/history` | riwayat versi **penuh** — full chain by identity tuple, oldest→newest (#587) |
 | POST | `/params/bulk-import` | import massal best-effort; balas `{summary, results:[{row,status,code,error\|id}]}` per-row (#588) |
 
 **Categories** (Wave C — data-driven `value_schema`) — reads; mutasi lewat `categories/wf-*`.

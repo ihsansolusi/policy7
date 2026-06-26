@@ -20,6 +20,9 @@ type Querier interface {
 	GetParameterByID(ctx context.Context, arg GetParameterByIDParams) (Parameter, error)
 	GetParameterCategoryByCode(ctx context.Context, arg GetParameterCategoryByCodeParams) (ParameterCategory, error)
 	GetParameterHistory(ctx context.Context, arg GetParameterHistoryParams) ([]ParameterHistory, error)
+	// GetParameterHistoryByIdentity is hand-written (see param_history_chain.go) —
+	// full version chain for a parameter's identity tuple (#587).
+	GetParameterHistoryByIdentity(ctx context.Context, arg GetParameterHistoryByIdentityParams) ([]ParameterHistory, error)
 	// List all category metadata for an org (active + inactive), ordered for display.
 	ListParameterCategories(ctx context.Context, orgID pgtype.UUID) ([]ParameterCategory, error)
 	ListParameters(ctx context.Context, arg ListParametersParams) ([]Parameter, error)

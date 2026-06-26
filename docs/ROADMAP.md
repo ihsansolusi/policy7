@@ -63,7 +63,13 @@ Grup 4 (NATS) · Grup 5 (`/health`, `/metrics`). Lihat [03-api](specs/03-api.md)
   Belum dibangun karena belum ada pemakainya (auth7 sudah tahu shape param yang dikonsumsi).
 
 ### Follow-up Policy Management (non-blocking, di devroot #401)
-- **#587** — full-chain version history (riwayat lintas tahap workflow; policy7 + workflow7).
+- ✅ **#587** — full-chain version history **DONE** (2026-06-26): `GET /admin/v1/params/:id/history`
+  kini mengembalikan rantai versi penuh dgn mengelompokkan semua row yang berbagi identity
+  tuple `(org_id, category, name, applies_to, applies_to_id, product)` — tiap versi adalah row
+  terpisah (own id). Query `GetParameterHistoryByIdentity` (hand-written di
+  `internal/store/param_history_chain.go` krn sqlc output drift dari schema). Divalidasi vs DB
+  nyata (EXPLAIN + 3-versi rollback proof: chain=3 vs per-id=1). UI `VersionHistory` (#585)
+  tinggal konsumsi.
 - ✅ **#588** — bulk-import per-row error detail **DONE** (2026-06-26): `POST
   /admin/v1/params/bulk-import` kini best-effort per-row, balas
   `{summary:{success_count,failed_count,total_count}, results:[{row,status,code,error|id}]}`.

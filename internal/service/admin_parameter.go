@@ -295,14 +295,18 @@ func (s *AdminParameterService) Update(ctx context.Context, id uuid.UUID, orgID 
 	return &newParam, nil
 }
 
+// GetHistory returns the FULL version chain for the parameter identity that `id`
+// belongs to (#587). Each version is a separate parameters row (own id), so the
+// history is gathered across all rows sharing the identity tuple
+// (org_id, category, name, applies_to, applies_to_id, product), ordered oldest→newest.
 func (s *AdminParameterService) GetHistory(ctx context.Context, id uuid.UUID, orgID uuid.UUID) ([]store.ParameterHistory, error) {
 	var pgID, pgOrgID pgtype.UUID
 	_ = pgID.Scan(id.String())
 	_ = pgOrgID.Scan(orgID.String())
 
-	histories, err := s.db.GetParameterHistory(ctx, store.GetParameterHistoryParams{
-		ParameterID: pgID,
-		OrgID:       pgOrgID,
+	histories, err := s.db.GetParameterHistoryByIdentity(ctx, store.GetParameterHistoryByIdentityParams{
+		ID:    pgID,
+		OrgID: pgOrgID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get history: %w", err)
