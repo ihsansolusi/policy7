@@ -22,73 +22,28 @@ type policyAuditEntry struct {
 	After        any             // new state snapshot (nil for delete)
 }
 
-// wfAuditContext is the request transport context the bos7 BFF injects into the
-// workflow `data` payload (workflow7's ActorEnvelope headers only carry identity
-// + branch, not ip/ua/session). Mirrors bos7 initiator withAuditContext.
-type wfAuditContext struct {
-	IPAddress  string `json:"ip_address"`
-	UserAgent  string `json:"user_agent"`
-	SessionID  string `json:"session_id"`
-	BranchID   string `json:"branch_id"`
-	BranchCode string `json:"branch_code"`
-}
-
-func parseWfAuditContext(data json.RawMessage) wfAuditContext {
-	var ctx wfAuditContext
-	if len(data) > 0 {
-		_ = json.Unmarshal(data, &ctx)
-	}
-	return ctx
-}
-
-// forwardPolicyAudit ships a policy mutation to audit7 (fire-and-forget). A nil
-// client (AUDIT7_URL unset) makes this a no-op. Actor identity comes from the
-// workflow7-signed ActorEnvelope headers (X-Actor-*); ip/ua/session/branch come
-// from the request context the bos7 BFF injected into the wf data (falling back
-// to the envelope branch headers). correlation_id is the workflow instance id so
-// the audit row links back to the approval flow. Channel is BFF because the
-// mutation originated from the bos7-enterprise policy-management UI via workflow7.
+// forwardPolicyAudit ships a policy mutation to audit7 (fire-and-forget) via the
+// shared lib7 audit7client.ForwardWfMutation helper. A nil client (AUDIT7_URL
+// unset) makes this a no-op. Actor identity comes from the workflow7-signed
+// ActorEnvelope headers (X-Actor-*); ip/ua/session/branch are parsed by the
+// helper from the wf data the bos7 BFF injected (branch falls back to the
+// envelope headers). correlation_id is the workflow instance id; channel is BFF.
 func forwardPolicyAudit(c *gin.Context, client *audit7client.Client, e policyAuditEntry) {
-	if client == nil {
-		return
-	}
-	ctx := parseWfAuditContext(e.Data)
-
-	branchID := ctx.BranchID
-	if branchID == "" {
-		branchID = c.GetHeader("X-Actor-BranchID")
-	}
-	branchCode := ctx.BranchCode
-	if branchCode == "" {
-		branchCode = c.GetHeader("X-Actor-BranchCode")
-	}
-	display := c.GetHeader("X-Actor-Username")
-	if display == "" {
-		display = e.UserID
-	}
-
-	client.SendAsync(c.Request.Context(), audit7client.Event{
-		OrgID:         e.OrgID,
-		BranchID:      branchID,
-		BranchCode:    branchCode,
-		SessionID:     ctx.SessionID,
-		CorrelationID: e.WfInstanceID,
-		IPAddress:     ctx.IPAddress,
-		UserAgent:     ctx.UserAgent,
-		Actor: audit7client.Actor{
-			Type:    "user",
-			ID:      e.UserID,
-			Display: display,
-		},
-		EventCategory:  "MODIFICATION",
-		Action:         e.Action,
-		Resource:       audit7client.Resource{Type: e.ResourceType, ID: e.ResourceID, Name: e.ResourceName},
-		Result:         "SUCCESS",
-		Severity:       "INFO",
-		Channel:        "BFF",
-		SourceApp:      "policy7",
-		Module:         "policy-management",
-		BeforeSnapshot: e.Before,
-		AfterSnapshot:  e.After,
+	client.ForwardWfMutation(c.Request.Context(), audit7client.WfMutation{
+		SourceApp:    "policy7",
+		Module:       "policy-management",
+		Action:       e.Action,
+		ResourceType: e.ResourceType,
+		ResourceID:   e.ResourceID,
+		ResourceName: e.ResourceName,
+		OrgID:        e.OrgID,
+		ActorID:      e.UserID,
+		ActorDisplay: c.GetHeader("X-Actor-Username"),
+		WfInstanceID: e.WfInstanceID,
+		BranchID:     c.GetHeader("X-Actor-BranchID"),
+		BranchCode:   c.GetHeader("X-Actor-BranchCode"),
+		Data:         e.Data,
+		Before:       e.Before,
+		After:        e.After,
 	})
 }
