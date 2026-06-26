@@ -30,69 +30,64 @@ Diperbarui 2026-06-26.
 - **Policy Management UI overhaul** (bos7-enterprise umbrella #556, CLOSED) — schema-driven
   page CRUD, versioning/rollback, bulk import, effective simulator.
 
+## ✅ API migration → kontrak target (5 grup) — SELESAI (2026-06-26)
+
+Review lintas-repo menemukan **~separuh surface tak punya caller in-tree**. Consumer runtime
+nyata: **bos7-enterprise BFF** (reads `/admin/v1` + `/v1/.../effective` + bulk-import),
+**workflow7** (mutasi via `wf-*`), dan **auth7** (#161 `dd7b5fb` — `operational_hours` via
+generic `/v1/params/{category}/{name}/effective` + opacache + NATS, **bukan** endpoint
+hardcoded). auth7-ui / core7-service-* / Go SDK tidak memanggil policy7 via HTTP. Karena
+design-justified (endpoint hardcoded-per-kategori tak cocok dengan kategori data-driven) +
+0 in-tree caller, retirement dieksekusi langsung. Detail: [06-api-grouping](specs/06-api-grouping.md).
+
+- **Fase 1** ✅ inquiry generik (additive): `POST /v1/params/resolve` (batch) +
+  `GET /v1/params?category=…` (snapshot) — `internal/api/inquiry_handler.go`.
+- **Fase 2+4** ✅ hapus `/v1` hardcoded (basic get, operational-hours, product-access,
+  approval-thresholds, rates, fees, regulatory(+check), authorization_limit/check) +
+  `/contracts/*` (`contract_handler.go`) + telemetry transisional (`usage_metrics.go`).
+- **Fase 3** ✅ hapus direct admin CRUD (`POST/PUT/DELETE /admin/v1/params` & `/categories`,
+  `POST /params/query`). Mutasi hanya lewat `wf-*`; validasi tetap utuh (`validateScopeContext`
+  + service gate); test validasi dipindah ke `WfCreate`.
+- **Fase 5** ✅ hapus `pkg/client` Go SDK (0 importer; konsumen pakai REST `/v1` langsung,
+  pola auth7 `internal/policy7client`).
+
+**Surface akhir:** Grup 1 (`/admin/v1` reads + bulk-import + `wf-*`) · Grup 2 (`/effective`,
+`resolve`, snapshot, `transaction_limit/validate`) · Grup 3 (`/admin/v1/categories` reads) ·
+Grup 4 (NATS) · Grup 5 (`/health`, `/metrics`). Lihat [03-api](specs/03-api.md).
+
 ## 🔭 Backlog / belum diimplementasi
 
-### API migration → kontrak target (5 grup) — Fase 1–4 SELESAI (2026-06-26)
-
-Review lintas-repo (2026-06-26) menemukan **~separuh surface tidak punya caller in-tree**.
-Consumer runtime nyata: **bos7-enterprise BFF** (reads `/admin/v1` + `/v1/.../effective` +
-bulk-import), **workflow7** (mutasi via `wf-*`), dan **auth7** (#161 `dd7b5fb` —
-`operational_hours` via generic `/v1/params/{category}/{name}/effective` + opacache + NATS,
-**bukan** endpoint hardcoded). auth7-ui / core7-service-* / Go SDK `pkg/client` tidak memanggil
-policy7 via HTTP. auth7 memvalidasi desain Grup 2 — consumer baru pun memilih endpoint generik.
-
-Karena temuan ini design-justified (endpoint hardcoded-per-kategori struktural tak cocok dengan
-kategori data-driven) + 0 in-tree caller, retirement dieksekusi langsung (Fase 2+4 digabung),
-bukan via observasi telemetry. Mengikuti [docs/specs/06-api-grouping.md](specs/06-api-grouping.md).
-
-- **Fase 1 — Inquiry generik (additive)** ✅: `POST /v1/params/resolve` (batch) +
-  `GET /v1/params?category=…` (snapshot) di `internal/api/inquiry_handler.go` +
-  `ParameterService.SnapshotByCategory`.
-- **Fase 2 — Deprecate hardcoded `/v1`** ✅ (digabung ke Fase 4): transitional telemetry
-  (`policy7_endpoint_usage_total` / `trackUsage`) sempat dipasang lalu **dihapus** bersama
-  endpoint-nya.
-- **Fase 3 — Retire direct admin CRUD** ✅: hapus `POST/PUT/DELETE /admin/v1/params` &
-  `/categories` + `POST /params/query` (handler + route). Semua mutasi lewat `wf-*`. Validasi
-  (`validateScopeContext` + service category/value_schema gate) tetap utuh di jalur `wf-*`;
-  test validasi dipindah ke `WfCreate`.
-- **Fase 4 — Hapus `/v1` hardcoded + `/contracts/*` + handler mati** ✅: dihapus
-  `GetParameter`(basic)/`GetRates`/`GetFees`/`GetRegulatory`/`CheckRegulatory`/
-  `CheckAuthorizationLimit`/`GetApprovalThresholds`/`GetOperationalHours`/`GetProductAccess` +
-  `contract_handler.go` + `usage_metrics.go`. Pertahankan `…/effective` +
-  `transaction_limit/validate` (decision helper).
-
-**Surface akhir:** Grup 1 (`/admin/v1` reads + bulk-import + `wf-*`) · Grup 2
-(`/effective`, `resolve`, snapshot, `transaction_limit/validate`) · Grup 3 (`/admin/v1/categories`
-reads) · Grup 4 (NATS) · Grup 5 (`/health`, `/metrics`). Lihat [03-api](specs/03-api.md).
-
-- **Fase 5 — Discovery + SDK** ✅ (2026-06-26): **`pkg/client` Go SDK dihapus** (4 method, 0
-  importer; konsumen pakai REST `/v1` langsung — pola acuan auth7 `internal/policy7client`).
-  Menghapusnya sekaligus menyelesaikan kegagalan test pre-existing `pkg/client`.
-  **Discovery `value_schema` di `/v1`: ditunda (YAGNI)** — belum ada consumer non-admin yang
-  butuh bentuk value (auth7 tahu shape-nya); tetap di `/admin/v1/categories`. Tambahkan saat
-  consumer generik pertama muncul.
-
-### Cross-stream dependency
-- Canonical role identifier (`role_id` vs `role_code`) masih bergantung pada auth7.
+### Discovery `value_schema` read di `/v1` (Grup 3) — ditunda (YAGNI)
+- Saat ini `value_schema` hanya dibaca via `/admin/v1/categories`. Bila muncul consumer
+  **non-admin** yang perlu menafsirkan bentuk value secara generik, expose read-only di `/v1`.
+  Belum dibangun karena belum ada pemakainya (auth7 sudah tahu shape param yang dikonsumsi).
 
 ### Follow-up Policy Management (non-blocking, di devroot #401)
-- **#577** — SSE tracker race pada UI mutasi.
-- **#587** — full-chain version history (riwayat lintas tahap workflow).
-- **#588** — bulk-import error reporting per-row.
+- **#587** — full-chain version history (riwayat lintas tahap workflow; policy7 + workflow7).
+- **#588** — bulk-import error reporting per-row (policy7, self-contained).
 
-### Data / seed hygiene
-- `validateCategoryContext` mewajibkan `product` untuk `transaction_limit`; seed saat ini
-  meng-NULL-kan via SQL bypass → perlu rekonsiliasi owner.
+> #577 (SSE tracker race) bukan backend policy7 — murni FE bos7-enterprise
+> (`useWorkflowTracker`); dilacak di devroot#401, tidak di ROADMAP ini.
 
 ### DEF / migration (low priority)
 - Nama auto-index `org_id` berbeda dari deployment lama (`idx_parameters_org_id` vs
   `idx_parameters_org`) — kosmetik.
-- Belum migrasi ke `FwRelation` (sengaja tanpa soft-delete `deleted_at/by` yang tak ada di
-  produksi).
 
 ### Potensi v2
 - gRPC untuk query low-latency.
 - Conditional parameters (mis. limit berbeda saat hari libur).
+
+---
+
+## Keputusan desain (bukan backlog)
+- **Tanpa soft-delete `FwRelation`** — sengaja tetap entitas `{}` polos; tak ada
+  `deleted_at/by` di produksi.
+- **Discovery `value_schema` hanya di `/admin/v1`** untuk sekarang — lihat backlog di atas.
+- **`validateCategoryContext` product-rule untuk transaction_limit DIHAPUS** (#579) — validitas
+  kini murni data-driven via `value_schema`; seed tak perlu bypass lagi.
+- **Identifier role = `role_code` (string), bukan UUID** — konvergen dgn auth7 (klaim JWT
+  `Roles` = kode via `GetRoleCodesByUser`; policy7 `applies_to_id` role = kode). Verified
+  2026-06-26; bukan lagi dependency terbuka.
 
 > Konteks historis (Plan 07/12/13, planning issues) dipindah ke
 > `_backup/policy7-cleanup-20260626/` di root devroot saat cleanup dokumentasi 2026-06-26.
