@@ -1,65 +1,97 @@
 # Policy7
 
-Policy7 is a centralized business policy and parameter service for the Core7 ecosystem. It manages all configuration that can change without requiring application redeployment.
+**Centralized business-policy & parameter service** untuk ekosistem Core7.
 
-## Key Features
+Policy7 menyimpan seluruh **parameter bisnis** yang bisa berubah tanpa redeploy aplikasi —
+transaction limit, approval threshold, jam operasional, bunga & biaya, ambang regulator
+(CTR/STR), dan aturan akses produk. Semua service lain (auth7, enterprise, workflow7,
+notif7) mengkonsumsinya lewat REST sehingga parameter tidak lagi tersebar & terduplikasi
+di tiap service.
 
-- **Multi-tenant isolation**: Strict enforcement of `X-Org-ID` for all operations.
-- **Parameter Inheritance**: Evaluates parameters following a resolution fallback: `user` -> `role` -> `branch` -> `global`.
-- **Two-Limit Pattern**: Differentiates between Authorization Limits (requires approval) and Transaction Limits (hard ceiling).
-- **Audit Trails & Versioning**: All modifications to parameters are versioned and audited seamlessly in `parameter_history`.
-- **Hybrid Data Store**: Relies on PostgreSQL 16 (accessed via strictly typed `sqlc`) and Redis for high-speed hot-caching.
-- **Event Streaming**: NATS integration for async cache invalidation and telemetry broadcasting.
+> **Batas tegas:** policy7 menjawab *"berapa batasnya?"* / *"berapa nilainya?"*.
+> Keputusan boolean *"boleh atau tidak?"* tetap milik **auth7** (ABAC/Rego),
+> orkestrasi *"siapa yang approve?"* tetap milik **workflow7**.
 
-## Managed Configurations
+---
 
-- Transaction limits (employee & customer)
-- Approval thresholds
-- Operational hours
-- Interest rates & fees
-- Regulatory thresholds (CTR/STR)
-- Product access rules
+## Status
 
-## Getting Started
+Service sudah **terimplementasi & terintegrasi** (runtime API, admin CRUD, versioning,
+NATS events, workflow7 approval callbacks, audit7 forwarding). Detail apa yang sudah jalan
+vs yang masih backlog ada di [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
-### Prerequisites
-- Go 1.22+
-- PostgreSQL 16
-- Redis 7
-- NATS Server
+## Yang Dikelola
 
-### Local Development Setup
+| Kategori | Contoh |
+|---|---|
+| Transaction limit (employee & customer) | Teller max Rp 100jt/transaksi |
+| Authorization / approval threshold | Auto-auth ≤ Rp 25jt, di atasnya butuh approval |
+| Operational hours | Teller 08:00–16:00 WIB |
+| Interest rates & fees | Deposito 12 bln 4.5% p.a.; transfer Rp 6.500 |
+| Regulatory thresholds | Lapor CTR jika transaksi > Rp 100jt |
+| Product access rules | Role mana boleh akses produk mana |
 
-```bash
-# Set up environment variables
-cp configs/.env.example .env
+## Arsitektur Singkat
 
-# Download dependencies
-make setup
+Clean architecture Go (`api → service → store → domain`) di atas **hybrid data store**:
+PostgreSQL 16 (pgx + sqlc) sebagai master, Redis untuk hot-cache, NATS untuk event &
+cache-invalidation. Lihat [`docs/specs/01-architecture.md`](docs/specs/01-architecture.md).
 
-# Spin up infrastructure (PostgreSQL & Redis)
-make db-up
-
-# Run database migrations
-make migrate-up
-
-# Start the application on port 8085
-make run
+```
+cmd/server       → entrypoint (Gin)
+internal/api     → REST handlers + middleware (auth, M2M, audit-signature)
+internal/service → business logic (resolution, versioning, NATS, branch-scope poller)
+internal/store   → PostgreSQL (sqlc) + Redis
+internal/domain  → entities, value_schema validator, errors
+pkg/client       → Go SDK untuk service konsumen
 ```
 
-### Running Tests
+## Quick Start
+
+Prasyarat: Go 1.22+, PostgreSQL 16, Redis 7, NATS (opsional di dev).
 
 ```bash
+cp .env.example .env          # set DATABASE_URL, REDIS_URL, PORT, dst.
+make setup                    # go mod tidy
+make db-up                    # docker compose: postgres + redis
+make migrate-up               # apply schema (migrations/)
+make seed-up                  # seed demo (migrations-seed/demo) — opsional
+make run                      # jalan di :8085
 make test
 ```
 
-## Architecture
+> **Migration files di-generate dari DEF**, bukan ditulis tangan. Sumbernya
+> `appdefs/policy7/src/defappconfig/data_model.def` di devroot. Regenerate:
+> `cd ../../appdefs/policy7 && make migrate-gen-reset`. Lihat
+> [`docs/specs/02-data-model.md`](docs/specs/02-data-model.md).
 
-Policy7 embraces Clean Architecture (domain, service, store, api layers) integrated with a Hybrid Messaging Strategy. See `docs/specs/` for architectural references and decision records.
+## API
 
-## Integration Points
+- **`/v1/*`** — consumer API (query parameter, validate transaction limit, rates/fees,
+  regulatory, operational hours). Butuh delegated JWT atau M2M.
+- **`/admin/v1/*`** — admin CRUD parameter & kategori + history + bulk-import. Dipakai
+  Policy Management UI di bos7-enterprise.
+- **`/admin/v1/.../wf-*`** — callback approval dari workflow7 (M2M + audit signature).
 
-- **Auth7**: Rego policies query Policy7 for operational hours and product access dynamically.
-- **Core7-Enterprise**: Validates transactions and applies correct fees directly sourced from Policy7.
-- **Workflow7**: Checks Policy7 for auto-approval thresholds and routing limits.
-- **Notif7**: Subscribes to regulatory flag events published via NATS.
+Daftar lengkap: [`docs/specs/03-api.md`](docs/specs/03-api.md).
+
+## Integrasi
+
+| Service | Pola | Use case |
+|---|---|---|
+| **auth7** | REST (ABAC input) | operational hours, product access untuk Rego |
+| **core7-enterprise** | REST + BFF (token-exchange) | validasi two-limit, rates & fees, admin UI |
+| **workflow7** | REST callback (M2M) | mutasi parameter via approval (`policy-param-*-v1`) |
+| **notif7** | NATS | alert ambang regulator |
+| **audit7** | NATS ingest | system of record untuk semua mutasi |
+
+Detail: [`docs/specs/04-integration.md`](docs/specs/04-integration.md),
+keamanan: [`docs/specs/05-security.md`](docs/specs/05-security.md).
+
+## Dokumentasi
+
+- [`docs/specs/`](docs/specs/) — spesifikasi teknis (overview, arsitektur, data model, API,
+  integrasi, security). Index: [`docs/specs/README.md`](docs/specs/README.md).
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) — yang sudah diimplementasi vs yang masih backlog.
+
+> Panduan kerja AI/Claude memakai `CLAUDE.md` di root devroot, bukan di submodule ini.
