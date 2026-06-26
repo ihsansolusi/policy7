@@ -1,7 +1,7 @@
 # Policy7 — Roadmap
 
 Status fitur policy7: yang **sudah diimplementasi** vs yang **masih backlog**.
-Diperbarui 2026-06-26.
+Diperbarui 2026-06-27.
 
 ## ✅ Sudah diimplementasi
 
@@ -55,24 +55,27 @@ design-justified (endpoint hardcoded-per-kategori tak cocok dengan kategori data
 `resolve`, snapshot, `transaction_limit/validate`) · Grup 3 (`/admin/v1/categories` reads) ·
 Grup 4 (NATS) · Grup 5 (`/health`, `/metrics`). Lihat [03-api](specs/03-api.md).
 
-## ✅ Selesai belakangan (2026-06-26)
+## ✅ Selesai belakangan (2026-06-26 → 27)
 - **Grup 3 discovery** — `GET /v1/categories` (+ `/:code`) read-only `value_schema` untuk
   consumer/tooling generik (handler sama dgn `/admin/v1`, read-only). Tersedia di kedua plane.
-- **#587 full-chain version history** (backend) — `GET /admin/v1/params/:id/history` balas
-  rantai versi penuh: group semua row yang berbagi identity tuple `(org_id, category, name,
-  applies_to, applies_to_id, product)`. Query `GetParameterHistoryByIdentity` (generated).
-  Divalidasi vs DB nyata (EXPLAIN + 3-versi rollback: chain=3 vs per-id=1).
-- **#588 bulk-import per-row errors** (backend) — `POST /admin/v1/params/bulk-import` best-effort
+- **#587 full-chain version history** — backend `GET /admin/v1/params/:id/history` balas rantai
+  versi penuh: group semua row yang berbagi identity tuple `(org_id, category, name, applies_to,
+  applies_to_id, product)`. Query `GetParameterHistoryByIdentity` (generated). Divalidasi vs DB
+  nyata (EXPLAIN + 3-versi rollback: chain=3 vs per-id=1). **UI selesai (2026-06-27)** —
+  bos7-enterprise `11d79f9`: tanpa perubahan FE (history BFF pass-through + `reconstructVersions`
+  agregasi by-version order-independent → `VersionHistory` render semua versi).
+- **#588 bulk-import per-row errors** — backend `POST /admin/v1/params/bulk-import` best-effort
   per-row → `{summary, results:[{row,status,code,error|id}]}`; validasi per-row = jalur single/wf.
+  **UI selesai (2026-06-27)** — bos7-enterprise `11d79f9`: kolom "Server result" per-baris di
+  `BulkImportSurface`.
 - **sqlc drift reconciled** — enum overrides di `sqlc.yaml`; codegen kini bersih/idempotent.
+
+> Catatan verifikasi: pekerjaan UI #587/#588 lolos gate repo (typecheck + eslint), **belum**
+> live e2e di browser. Backend policy7 divalidasi vs DB nyata.
 
 ## 🔭 Backlog / belum diimplementasi
 
-### UI surfacing (cross-repo — bos7-enterprise, bukan backend policy7)
-- **#587** — UI `VersionHistory` konsumsi full-chain (#585).
-- **#588** — tampilkan detail error per-row di surface bulk-import.
-
-> #577 (SSE tracker race) = FE bos7-enterprise (`useWorkflowTracker`); devroot#401.
+> #577 (SSE tracker race) = FE bos7-enterprise (`useWorkflowTracker`); dilacak di devroot#401.
 
 ### Potensi v2
 - gRPC untuk query low-latency.
