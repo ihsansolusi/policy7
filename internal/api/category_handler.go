@@ -200,19 +200,28 @@ func mergeCategory(current store.ParameterCategory, req categoryWriteRequest) me
 // becomes INVALID_PARAMETER_VALUE; a *domain.CategoryError (data-driven category
 // gate) becomes INVALID_CATEGORY.
 func writeSchemaError(c *gin.Context, err error) bool {
+	code, msg, detail, ok := schemaErrorCode(err)
+	if !ok {
+		return false
+	}
+	writeError(c, http.StatusUnprocessableEntity, code, msg, false, detail)
+	return true
+}
+
+// schemaErrorCode classifies a service validation error into an API error code,
+// message, and detail. ok=false for non-validation errors. Shared by
+// writeSchemaError (single write) and bulk-import per-row reporting (#588).
+func schemaErrorCode(err error) (code, message string, detail gin.H, ok bool) {
 	var schemaErr *domain.SchemaValidationError
 	if errors.As(err, &schemaErr) {
-		writeError(c, http.StatusUnprocessableEntity, "INVALID_PARAMETER_VALUE",
-			"value failed schema validation", false, gin.H{"violations": schemaErr.Errors})
-		return true
+		return "INVALID_PARAMETER_VALUE", "value failed schema validation",
+			gin.H{"violations": schemaErr.Errors}, true
 	}
 	var catErr *domain.CategoryError
 	if errors.As(err, &catErr) {
-		writeError(c, http.StatusUnprocessableEntity, "INVALID_CATEGORY",
-			catErr.Error(), false, gin.H{"category": catErr.Code})
-		return true
+		return "INVALID_CATEGORY", catErr.Error(), gin.H{"category": catErr.Code}, true
 	}
-	return false
+	return "", "", nil, false
 }
 
 func optText(s *string) pgtype.Text {

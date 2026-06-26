@@ -425,23 +425,3 @@ func validateSchemaWellFormed(schema []byte) error {
 	}
 	return nil
 }
-
-func (s *AdminParameterService) BulkImport(ctx context.Context, orgID, userID uuid.UUID, params []store.CreateParameterParams) (int, error) {
-	successCount := 0
-	for _, p := range params {
-		var pgOrgID, pgUserID pgtype.UUID
-		_ = pgOrgID.Scan(orgID.String())
-		_ = pgUserID.Scan(userID.String())
-
-		p.OrgID = pgOrgID
-		p.CreatedBy = pgUserID
-		p.IsActive = true
-		p.Version = 1
-
-		_, err := s.Create(ctx, p, "bulk import")
-		if err == nil {
-			successCount++
-		}
-	}
-	return successCount, nil
-}

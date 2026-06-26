@@ -188,57 +188,59 @@ func (h *AdminHandler) BulkImport(c *gin.Context) {
 		return
 	}
 
-	var paramsToCreate []store.CreateParameterParams
-	for _, p := range req {
-		var appliesToID pgtype.Text
-		if p.AppliesToID != nil {
-			appliesToID = pgtype.Text{String: *p.AppliesToID, Valid: true}
-		}
-		var product pgtype.Text
-		if p.Product != nil {
-			product = pgtype.Text{String: *p.Product, Valid: true}
-		}
-		var unit pgtype.Text
-		if p.Unit != nil {
-			unit = pgtype.Text{String: *p.Unit, Valid: true}
-		}
-		var scope pgtype.Text
-		if p.Scope != nil {
-			scope = pgtype.Text{String: *p.Scope, Valid: true}
-		}
+	var pgOrgID, pgUserID pgtype.UUID
+	_ = pgOrgID.Scan(orgID.String())
+	_ = pgUserID.Scan(userID.String())
 
-		paramsToCreate = append(paramsToCreate, store.CreateParameterParams{
-			Category:    p.Category,
-			Name:        p.Name,
-			AppliesTo:   p.AppliesTo,
-			AppliesToID: appliesToID,
-			Product:     product,
-			Value:       p.Value,
-			ValueType:   p.ValueType,
-			Unit:        unit,
-			Scope:       scope,
-			// effective_from is NOT NULL; the INSERT lists it explicitly so the
-			// column DEFAULT does not apply. Stamp now() like the single-create
-			// handler — otherwise every bulk row fails the not-null constraint.
+	// Best-effort per-row import: each row is validated + created independently so
+	// one bad row doesn't sink the batch, and the caller gets {row,status,error}
+	// for every row (#588, spec 02 §9). Same validation as the single/wf path
+	// (scope shape + data-driven category + value_schema).
+	results := make([]gin.H, 0, len(req))
+	success := 0
+	for i, p := range req {
+		if err := validateScopeContext(p.AppliesTo, p.AppliesToID); err != nil {
+			results = append(results, gin.H{"row": i, "status": "failed", "code": "INVALID_CALLER_CONTEXT", "error": err.Error()})
+			continue
+		}
+		param, err := h.svc.Create(ctx, store.CreateParameterParams{
+			OrgID:         pgOrgID,
+			Category:      p.Category,
+			Name:          p.Name,
+			AppliesTo:     p.AppliesTo,
+			AppliesToID:   optText(p.AppliesToID),
+			Product:       optText(p.Product),
+			Value:         p.Value,
+			ValueType:     p.ValueType,
+			Unit:          optText(p.Unit),
+			Scope:         optText(p.Scope),
 			EffectiveFrom: pgtype.Timestamptz{Time: time.Now(), Valid: true},
-		})
-	}
-
-	count, err := h.svc.BulkImport(ctx, orgID, userID, paramsToCreate)
-	if err != nil {
-		span.RecordError(err)
-		logger.Error().Err(err).Str("op", op).Msg("failed")
-		writeError(c, http.StatusInternalServerError, "POLICY_BACKEND_UNAVAILABLE", err.Error(), true, nil)
-		return
+			IsActive:      true,
+			Version:       1,
+			CreatedBy:     pgUserID,
+		}, "bulk import")
+		if err != nil {
+			code, msg, _, known := schemaErrorCode(err)
+			if !known {
+				code, msg = "POLICY_BACKEND_UNAVAILABLE", err.Error()
+				span.RecordError(err)
+				logger.Error().Err(err).Int("row", i).Str("op", op).Msg("bulk row failed")
+			}
+			results = append(results, gin.H{"row": i, "status": "failed", "code": code, "error": msg})
+			continue
+		}
+		success++
+		results = append(results, gin.H{"row": i, "status": "created", "id": pgUUIDString(param.ID)})
 	}
 
 	span.SetStatus(codes.Ok, "")
 	writeSuccess(c, http.StatusOK, gin.H{
-		"message": "bulk import completed",
 		"summary": gin.H{
-			"success_count": count,
+			"success_count": success,
+			"failed_count":  len(req) - success,
 			"total_count":   len(req),
 		},
+		"results": results,
 	})
 }
 

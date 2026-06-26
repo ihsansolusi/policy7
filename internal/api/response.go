@@ -1,8 +1,6 @@
 package api
 
 import (
-	"net/http"
-
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -39,8 +37,4 @@ func writeSuccess(c *gin.Context, status int, data interface{}) {
 		"success": true,
 		"data":    data,
 	})
-}
-
-func writeNoContent(c *gin.Context) {
-	c.Status(http.StatusNoContent)
 }

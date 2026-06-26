@@ -64,7 +64,11 @@ Grup 4 (NATS) · Grup 5 (`/health`, `/metrics`). Lihat [03-api](specs/03-api.md)
 
 ### Follow-up Policy Management (non-blocking, di devroot #401)
 - **#587** — full-chain version history (riwayat lintas tahap workflow; policy7 + workflow7).
-- **#588** — bulk-import error reporting per-row (policy7, self-contained).
+- ✅ **#588** — bulk-import per-row error detail **DONE** (2026-06-26): `POST
+  /admin/v1/params/bulk-import` kini best-effort per-row, balas
+  `{summary:{success_count,failed_count,total_count}, results:[{row,status,code,error|id}]}`.
+  Validasi per-row sama dgn jalur single/wf (scope + category + value_schema). Sisa: surface
+  detail ini di UI bos7-enterprise.
 
 > #577 (SSE tracker race) bukan backend policy7 — murni FE bos7-enterprise
 > (`useWorkflowTracker`); dilacak di devroot#401, tidak di ROADMAP ini.
