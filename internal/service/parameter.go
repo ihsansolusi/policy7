@@ -151,6 +151,34 @@ func (s *ParameterService) GetEffectiveParameter(ctx context.Context, orgID uuid
 	return nil, fmt.Errorf("no effective parameter found for %s:%s", category, name)
 }
 
+// SnapshotByCategory returns all active parameters in a category for an org,
+// optionally filtered by product. It backs the generic Grup-2 snapshot endpoint
+// (GET /v1/params?category=…) used for cache-warm / "give me all rates" reads —
+// replacing the hardcoded per-category list endpoints. limit caps the result set.
+func (s *ParameterService) SnapshotByCategory(ctx context.Context, orgID uuid.UUID, category string, product *string, limit int32) ([]store.Parameter, error) {
+	const op = "service.ParameterService.SnapshotByCategory"
+
+	var pgOrgID pgtype.UUID
+	_ = pgOrgID.Scan(orgID.String())
+
+	pgProduct := pgtype.Text{}
+	if product != nil && *product != "" {
+		pgProduct = pgtype.Text{String: *product, Valid: true}
+	}
+
+	params, err := s.db.ListParametersFiltered(ctx, store.ListParametersFilteredParams{
+		OrgID:    pgOrgID,
+		Limit:    limit,
+		Offset:   0,
+		Category: pgtype.Text{String: category, Valid: true},
+		Product:  pgProduct,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+	return params, nil
+}
+
 // ResolveParameter implements Option C: BRANCH → BRANCH_TYPE → GLOBAL fallback.
 // Tier 1 looks for a branch-specific override, tier 2 for a branch_type default,
 // tier 3 for an org-global value. Returns domain.Parameter for use by callers.

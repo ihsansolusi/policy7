@@ -99,9 +99,11 @@ func SetupRoutes(
 	v1.Use(authMW)
 	v1.Use(middleware.RequireDelegatedOrM2M())
 	{
-		// ACTIVE — used by bos7-enterprise simulator. The rest of /v1 are
-		// deprecation candidates wrapped with trackUsage (docs/ROADMAP.md).
+		// ACTIVE (Grup 2, generic inquiry — docs/specs/06-api-grouping.md).
+		// The rest of /v1 are deprecation candidates wrapped with trackUsage.
 		v1.GET("/params/:category/:name/effective", handler.GetEffectiveParameter)
+		v1.POST("/params/resolve", handler.ResolveBatch) // batch resolve
+		v1.GET("/params", handler.Snapshot)              // category snapshot
 
 		// Basic REST API for parameters (superseded by .../effective).
 		v1.GET("/params/:category/:name", trackUsage(usageCounter), handler.GetParameter)

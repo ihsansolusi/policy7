@@ -19,6 +19,8 @@ Auth (lihat [05-security](05-security.md)):
 | Method | Path | Fungsi | Status |
 |---|---|---|---|
 | GET | `/params/:category/:name/effective` | resolusi efektif (inheritance) | ✅ aktif (BFF simulator) |
+| POST | `/params/resolve` | resolve banyak param sekaligus (batch) — `{context, keys[]}` | ✅ Grup 2 (Fase 1) |
+| GET | `/params?category=&product=` | snapshot semua param aktif dalam kategori | ✅ Grup 2 (Fase 1) |
 | GET | `/params/:category/:name` | ambil parameter (versi aktif, tanpa resolusi) | ⚠️ → pakai `/effective` |
 | POST | `/params/transaction_limit/validate` | two-limit decision (AUTO/REQUIRES/REJECTED) | ⚠️ decision-helper (lihat 06) |
 | POST | `/params/authorization_limit/check` | cek kapasitas approver | ⚠️ tak ada caller |

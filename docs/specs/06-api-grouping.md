@@ -47,9 +47,9 @@ policy7 menjalankan fallback (Option C `BRANCH→BRANCH_TYPE→GLOBAL`, atau
 
 | Operasi | Endpoint | Status |
 |---|---|---|
-| Resolve satu | `GET /v1/params/{category}/{name}/effective?branch_id=&role_id=&user_id=&product=` | ✅ sudah ada — kanonik |
-| Resolve banyak (batch) | `POST /v1/params/resolve` | 🆕 |
-| Snapshot kategori | `GET /v1/params?category={code}&product=…` (effective only) | 🆕 |
+| Resolve satu | `GET /v1/params/{category}/{name}/effective?branch_id=&role_id=&user_id=&product=` | ✅ kanonik |
+| Resolve banyak (batch) | `POST /v1/params/resolve` | ✅ Fase 1 (`inquiry_handler.go`) |
+| Snapshot kategori | `GET /v1/params?category={code}&product=…` (effective only) | ✅ Fase 1 (`inquiry_handler.go`) |
 | Decision helper | `POST /v1/params/transaction_limit/validate` (two-limit) | ⚠️ pertahankan sbg semantik eksplisit |
 
 **`POST /v1/params/resolve`** (batch — satu decision sering butuh banyak param):

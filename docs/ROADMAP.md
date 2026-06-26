@@ -72,10 +72,12 @@ kandidat hapus. Service yang dulu diharapkan memakainya tidak memanggil policy7 
 Mengikuti [docs/specs/06-api-grouping.md](specs/06-api-grouping.md). Bertahap, tiap fase
 aman & independen. Telemetry `policy7_endpoint_usage_total` jadi safety-net saat memotong.
 
-- **Fase 1 — Inquiry generik (additive, no breaking).** Tambah `POST /v1/params/resolve`
-  (batch) + `GET /v1/params?category=…` (snapshot effective). Tidak menghapus apa pun.
-  Update `pkg/client` (bila dipertahankan) → `Resolve` / `BatchResolve`. Output: konsumen
-  punya satu cara generik untuk semua kategori (termasuk kategori baru buatan admin).
+- **Fase 1 — Inquiry generik (additive, no breaking).** ✅ **Sebagian (2026-06-26):**
+  `POST /v1/params/resolve` (batch) + `GET /v1/params?category=…` (snapshot effective)
+  ditambah di `internal/api/inquiry_handler.go` (+ `ParameterService.SnapshotByCategory`),
+  tidak menghapus apa pun. **Sisa:** update/retire `pkg/client` (`Resolve`/`BatchResolve`)
+  — ditunda (0 importer). Output: konsumen punya satu cara generik untuk semua kategori
+  (termasuk kategori baru buatan admin).
 - **Fase 2 — Deprecate hardcoded `/v1`.** Tandai `operational-hours`, `product-access`,
   `approval-thresholds`, `rates/:product`, `fees/:product`, `regulatory/:type`,
   `GET /params/:category/:name` (basic), `authorization_limit/check`, `regulatory/:type/check`
