@@ -80,7 +80,7 @@ func (h *CategoryHandler) WfCreate(c *gin.Context) {
 		Description:  optText(req.Description),
 		ValueSchema:  req.ValueSchema,
 		DefaultValue: req.DefaultValue,
-		DisplayOrder: optInt4(req.DisplayOrder),
+		DisplayOrder: derefInt32(req.DisplayOrder),
 		Icon:         optText(req.Icon),
 		Color:        optText(req.Color),
 		IsActive:     isActive,
@@ -104,7 +104,7 @@ func (h *CategoryHandler) WfCreate(c *gin.Context) {
 		Action: "create_category", ResourceType: "parameter_category",
 		ResourceID: cat.Code, ResourceName: req.Name,
 		OrgID: orgID.String(), UserID: userID.String(), WfInstanceID: env.WfInstanceID,
-		Data: env.Data,
+		Data:  env.Data,
 		After: json.RawMessage(env.Data),
 	})
 
@@ -185,7 +185,7 @@ func (h *CategoryHandler) WfUpdate(c *gin.Context) {
 		Action: "update_category", ResourceType: "parameter_category",
 		ResourceID: cat.Code, ResourceName: merged.Name,
 		OrgID: orgID.String(), UserID: userID.String(), WfInstanceID: env.WfInstanceID,
-		Data: env.Data,
+		Data:   env.Data,
 		Before: current, After: json.RawMessage(env.Data),
 	})
 
@@ -233,7 +233,7 @@ func (h *CategoryHandler) WfDelete(c *gin.Context) {
 		Action: "delete_category", ResourceType: "parameter_category",
 		ResourceID: code, ResourceName: resourceName,
 		OrgID: orgID.String(), UserID: userID.String(), WfInstanceID: env.WfInstanceID,
-		Data: env.Data,
+		Data:   env.Data,
 		Before: before,
 	})
 

@@ -10,18 +10,23 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-// Master parameter table with versioning support
+type BranchScope struct {
+	BranchID       pgtype.UUID        `json:"branch_id"`
+	OrgID          pgtype.UUID        `json:"org_id"`
+	BranchType     string             `json:"branch_type"`
+	ParentBranchID pgtype.UUID        `json:"parent_branch_id"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	SyncedAt       pgtype.Timestamptz `json:"synced_at"`
+}
+
 type Parameter struct {
-	ID    pgtype.UUID `json:"id"`
-	OrgID pgtype.UUID `json:"org_id"`
-	// Parameter category: transaction_limit, rate, fee, regulatory, operational_hours, approval_threshold, authorization_limit
-	Category string `json:"category"`
-	Name     string `json:"name"`
-	// Entity type this parameter applies to: role, customer_type, product, global, branch, user
-	AppliesTo   string      `json:"applies_to"`
-	AppliesToID pgtype.Text `json:"applies_to_id"`
-	Product     pgtype.Text `json:"product"`
-	// JSONB value - can be number, string, object, or array
+	ID             pgtype.UUID        `json:"id"`
+	OrgID          pgtype.UUID        `json:"org_id"`
+	Category       string             `json:"category"`
+	Name           string             `json:"name"`
+	AppliesTo      string             `json:"applies_to"`
+	AppliesToID    pgtype.Text        `json:"applies_to_id"`
+	Product        pgtype.Text        `json:"product"`
 	Value          json.RawMessage    `json:"value"`
 	ValueType      string             `json:"value_type"`
 	Unit           pgtype.Text        `json:"unit"`
@@ -29,14 +34,13 @@ type Parameter struct {
 	EffectiveFrom  pgtype.Timestamptz `json:"effective_from"`
 	EffectiveUntil pgtype.Timestamptz `json:"effective_until"`
 	Version        int32              `json:"version"`
-	// Only one version active at a time per parameter combination
-	IsActive  bool               `json:"is_active"`
-	CreatedBy pgtype.UUID        `json:"created_by"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	IsActive       bool               `json:"is_active"`
+	CreatedBy      pgtype.UUID        `json:"created_by"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedBy      pgtype.UUID        `json:"updated_by"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
-// Metadata and configuration for parameter categories
 type ParameterCategory struct {
 	ID           pgtype.UUID        `json:"id"`
 	OrgID        pgtype.UUID        `json:"org_id"`
@@ -45,7 +49,7 @@ type ParameterCategory struct {
 	Description  pgtype.Text        `json:"description"`
 	ValueSchema  json.RawMessage    `json:"value_schema"`
 	DefaultValue json.RawMessage    `json:"default_value"`
-	DisplayOrder pgtype.Int4        `json:"display_order"`
+	DisplayOrder int32              `json:"display_order"`
 	Icon         pgtype.Text        `json:"icon"`
 	Color        pgtype.Text        `json:"color"`
 	IsActive     bool               `json:"is_active"`
@@ -55,19 +59,17 @@ type ParameterCategory struct {
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 }
 
-// Audit trail for all parameter changes
 type ParameterHistory struct {
-	ID              pgtype.UUID     `json:"id"`
-	ParameterID     pgtype.UUID     `json:"parameter_id"`
-	OrgID           pgtype.UUID     `json:"org_id"`
-	PreviousValue   json.RawMessage `json:"previous_value"`
-	NewValue        json.RawMessage `json:"new_value"`
-	ChangeType      string          `json:"change_type"`
-	PreviousVersion pgtype.Int4     `json:"previous_version"`
-	NewVersion      int32           `json:"new_version"`
-	// Required for update operations - business justification
-	ChangeReason   pgtype.Text        `json:"change_reason"`
-	ChangeMetadata json.RawMessage    `json:"change_metadata"`
-	ChangedBy      pgtype.UUID        `json:"changed_by"`
-	ChangedAt      pgtype.Timestamptz `json:"changed_at"`
+	ID              pgtype.UUID        `json:"id"`
+	ParameterID     pgtype.UUID        `json:"parameter_id"`
+	OrgID           pgtype.UUID        `json:"org_id"`
+	PreviousValue   json.RawMessage    `json:"previous_value"`
+	NewValue        json.RawMessage    `json:"new_value"`
+	ChangeType      string             `json:"change_type"`
+	PreviousVersion int32              `json:"previous_version"`
+	NewVersion      int32              `json:"new_version"`
+	ChangeReason    string             `json:"change_reason"`
+	ChangeMetadata  json.RawMessage    `json:"change_metadata"`
+	ChangedBy       pgtype.UUID        `json:"changed_by"`
+	ChangedAt       pgtype.Timestamptz `json:"changed_at"`
 }

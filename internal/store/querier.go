@@ -20,8 +20,11 @@ type Querier interface {
 	GetParameterByID(ctx context.Context, arg GetParameterByIDParams) (Parameter, error)
 	GetParameterCategoryByCode(ctx context.Context, arg GetParameterCategoryByCodeParams) (ParameterCategory, error)
 	GetParameterHistory(ctx context.Context, arg GetParameterHistoryParams) ([]ParameterHistory, error)
-	// GetParameterHistoryByIdentity is hand-written (see param_history_chain.go) —
-	// full version chain for a parameter's identity tuple (#587).
+	// Full version chain (#587): each version is a distinct parameters row (own id),
+	// so history keyed by parameter_id is fragmented. Resolve the identity tuple of
+	// parameter $1, then gather history across ALL rows sharing that tuple
+	// (org_id, category, name, applies_to, COALESCE applies_to_id, COALESCE product),
+	// ordered oldest->newest.
 	GetParameterHistoryByIdentity(ctx context.Context, arg GetParameterHistoryByIdentityParams) ([]ParameterHistory, error)
 	// List all category metadata for an org (active + inactive), ordered for display.
 	ListParameterCategories(ctx context.Context, orgID pgtype.UUID) ([]ParameterCategory, error)

@@ -64,6 +64,27 @@ SELECT * FROM parameter_history
 WHERE parameter_id = $1 AND org_id = $2
 ORDER BY changed_at DESC;
 
+-- name: GetParameterHistoryByIdentity :many
+-- Full version chain (#587): each version is a distinct parameters row (own id),
+-- so history keyed by parameter_id is fragmented. Resolve the identity tuple of
+-- parameter $1, then gather history across ALL rows sharing that tuple
+-- (org_id, category, name, applies_to, COALESCE applies_to_id, COALESCE product),
+-- ordered oldest->newest.
+WITH target AS (
+    SELECT category, name, applies_to, applies_to_id, product
+    FROM parameters WHERE parameters.id = $1 AND parameters.org_id = $2
+)
+SELECT h.* FROM parameter_history h
+JOIN parameters p ON p.id = h.parameter_id
+CROSS JOIN target t
+WHERE h.org_id = $2
+  AND p.category = t.category
+  AND p.name = t.name
+  AND p.applies_to = t.applies_to
+  AND COALESCE(p.applies_to_id, '') = COALESCE(t.applies_to_id, '')
+  AND COALESCE(p.product, '') = COALESCE(t.product, '')
+ORDER BY h.new_version ASC, h.changed_at ASC;
+
 -- name: ListParameterCategories :many
 -- List all category metadata for an org (active + inactive), ordered for display.
 SELECT * FROM parameter_categories

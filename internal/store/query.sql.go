@@ -20,7 +20,7 @@ INSERT INTO parameters (
 ) VALUES (
   $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
 )
-RETURNING id, org_id, category, name, applies_to, applies_to_id, product, value, value_type, unit, scope, effective_from, effective_until, version, is_active, created_by, created_at, updated_at
+RETURNING id, org_id, category, name, applies_to, applies_to_id, product, value, value_type, unit, scope, effective_from, effective_until, version, is_active, created_by, created_at, updated_by, updated_at
 `
 
 type CreateParameterParams struct {
@@ -78,6 +78,66 @@ func (q *Queries) CreateParameter(ctx context.Context, arg CreateParameterParams
 		&i.IsActive,
 		&i.CreatedBy,
 		&i.CreatedAt,
+		&i.UpdatedBy,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createParameterCategory = `-- name: CreateParameterCategory :one
+INSERT INTO parameter_categories (
+    org_id, code, name, description, value_schema, default_value,
+    display_order, icon, color, is_active, created_by
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+)
+RETURNING id, org_id, code, name, description, value_schema, default_value, display_order, icon, color, is_active, created_by, created_at, updated_by, updated_at
+`
+
+type CreateParameterCategoryParams struct {
+	OrgID        pgtype.UUID     `json:"org_id"`
+	Code         string          `json:"code"`
+	Name         string          `json:"name"`
+	Description  pgtype.Text     `json:"description"`
+	ValueSchema  json.RawMessage `json:"value_schema"`
+	DefaultValue json.RawMessage `json:"default_value"`
+	DisplayOrder int32           `json:"display_order"`
+	Icon         pgtype.Text     `json:"icon"`
+	Color        pgtype.Text     `json:"color"`
+	IsActive     bool            `json:"is_active"`
+	CreatedBy    pgtype.UUID     `json:"created_by"`
+}
+
+func (q *Queries) CreateParameterCategory(ctx context.Context, arg CreateParameterCategoryParams) (ParameterCategory, error) {
+	row := q.db.QueryRow(ctx, createParameterCategory,
+		arg.OrgID,
+		arg.Code,
+		arg.Name,
+		arg.Description,
+		arg.ValueSchema,
+		arg.DefaultValue,
+		arg.DisplayOrder,
+		arg.Icon,
+		arg.Color,
+		arg.IsActive,
+		arg.CreatedBy,
+	)
+	var i ParameterCategory
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.Code,
+		&i.Name,
+		&i.Description,
+		&i.ValueSchema,
+		&i.DefaultValue,
+		&i.DisplayOrder,
+		&i.Icon,
+		&i.Color,
+		&i.IsActive,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedBy,
 		&i.UpdatedAt,
 	)
 	return i, err
@@ -100,9 +160,9 @@ type CreateParameterHistoryParams struct {
 	PreviousValue   json.RawMessage `json:"previous_value"`
 	NewValue        json.RawMessage `json:"new_value"`
 	ChangeType      string          `json:"change_type"`
-	PreviousVersion pgtype.Int4     `json:"previous_version"`
+	PreviousVersion int32           `json:"previous_version"`
 	NewVersion      int32           `json:"new_version"`
-	ChangeReason    pgtype.Text     `json:"change_reason"`
+	ChangeReason    string          `json:"change_reason"`
 	ChangeMetadata  json.RawMessage `json:"change_metadata"`
 	ChangedBy       pgtype.UUID     `json:"changed_by"`
 }
@@ -154,8 +214,25 @@ func (q *Queries) DeactivateParameter(ctx context.Context, arg DeactivateParamet
 	return err
 }
 
+const deactivateParameterCategory = `-- name: DeactivateParameterCategory :exec
+UPDATE parameter_categories
+SET is_active = FALSE, updated_by = $3, updated_at = NOW()
+WHERE org_id = $1 AND code = $2
+`
+
+type DeactivateParameterCategoryParams struct {
+	OrgID     pgtype.UUID `json:"org_id"`
+	Code      string      `json:"code"`
+	UpdatedBy pgtype.UUID `json:"updated_by"`
+}
+
+func (q *Queries) DeactivateParameterCategory(ctx context.Context, arg DeactivateParameterCategoryParams) error {
+	_, err := q.db.Exec(ctx, deactivateParameterCategory, arg.OrgID, arg.Code, arg.UpdatedBy)
+	return err
+}
+
 const getParameter = `-- name: GetParameter :one
-SELECT id, org_id, category, name, applies_to, applies_to_id, product, value, value_type, unit, scope, effective_from, effective_until, version, is_active, created_by, created_at, updated_at
+SELECT id, org_id, category, name, applies_to, applies_to_id, product, value, value_type, unit, scope, effective_from, effective_until, version, is_active, created_by, created_at, updated_by, updated_at
 FROM parameters
 WHERE org_id = $1
   AND category = $2
@@ -207,13 +284,14 @@ func (q *Queries) GetParameter(ctx context.Context, arg GetParameterParams) (Par
 		&i.IsActive,
 		&i.CreatedBy,
 		&i.CreatedAt,
+		&i.UpdatedBy,
 		&i.UpdatedAt,
 	)
 	return i, err
 }
 
 const getParameterByID = `-- name: GetParameterByID :one
-SELECT id, org_id, category, name, applies_to, applies_to_id, product, value, value_type, unit, scope, effective_from, effective_until, version, is_active, created_by, created_at, updated_at FROM parameters WHERE id = $1 AND org_id = $2
+SELECT id, org_id, category, name, applies_to, applies_to_id, product, value, value_type, unit, scope, effective_from, effective_until, version, is_active, created_by, created_at, updated_by, updated_at FROM parameters WHERE id = $1 AND org_id = $2
 `
 
 type GetParameterByIDParams struct {
@@ -242,6 +320,40 @@ func (q *Queries) GetParameterByID(ctx context.Context, arg GetParameterByIDPara
 		&i.IsActive,
 		&i.CreatedBy,
 		&i.CreatedAt,
+		&i.UpdatedBy,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getParameterCategoryByCode = `-- name: GetParameterCategoryByCode :one
+SELECT id, org_id, code, name, description, value_schema, default_value, display_order, icon, color, is_active, created_by, created_at, updated_by, updated_at FROM parameter_categories
+WHERE org_id = $1 AND code = $2
+`
+
+type GetParameterCategoryByCodeParams struct {
+	OrgID pgtype.UUID `json:"org_id"`
+	Code  string      `json:"code"`
+}
+
+func (q *Queries) GetParameterCategoryByCode(ctx context.Context, arg GetParameterCategoryByCodeParams) (ParameterCategory, error) {
+	row := q.db.QueryRow(ctx, getParameterCategoryByCode, arg.OrgID, arg.Code)
+	var i ParameterCategory
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.Code,
+		&i.Name,
+		&i.Description,
+		&i.ValueSchema,
+		&i.DefaultValue,
+		&i.DisplayOrder,
+		&i.Icon,
+		&i.Color,
+		&i.IsActive,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedBy,
 		&i.UpdatedAt,
 	)
 	return i, err
@@ -291,115 +403,55 @@ func (q *Queries) GetParameterHistory(ctx context.Context, arg GetParameterHisto
 	return items, nil
 }
 
-const listParameters = `-- name: ListParameters :many
-SELECT id, org_id, category, name, applies_to, applies_to_id, product, value, value_type, unit, scope, effective_from, effective_until, version, is_active, created_by, created_at, updated_at FROM parameters
-WHERE org_id = $1
-ORDER BY created_at DESC
-LIMIT $2 OFFSET $3
+const getParameterHistoryByIdentity = `-- name: GetParameterHistoryByIdentity :many
+WITH target AS (
+    SELECT category, name, applies_to, applies_to_id, product
+    FROM parameters WHERE parameters.id = $1 AND parameters.org_id = $2
+)
+SELECT h.id, h.parameter_id, h.org_id, h.previous_value, h.new_value, h.change_type, h.previous_version, h.new_version, h.change_reason, h.change_metadata, h.changed_by, h.changed_at FROM parameter_history h
+JOIN parameters p ON p.id = h.parameter_id
+CROSS JOIN target t
+WHERE h.org_id = $2
+  AND p.category = t.category
+  AND p.name = t.name
+  AND p.applies_to = t.applies_to
+  AND COALESCE(p.applies_to_id, '') = COALESCE(t.applies_to_id, '')
+  AND COALESCE(p.product, '') = COALESCE(t.product, '')
+ORDER BY h.new_version ASC, h.changed_at ASC
 `
 
-type ListParametersParams struct {
-	OrgID  pgtype.UUID `json:"org_id"`
-	Limit  int32       `json:"limit"`
-	Offset int32       `json:"offset"`
+type GetParameterHistoryByIdentityParams struct {
+	ID    pgtype.UUID `json:"id"`
+	OrgID pgtype.UUID `json:"org_id"`
 }
 
-func (q *Queries) ListParameters(ctx context.Context, arg ListParametersParams) ([]Parameter, error) {
-	rows, err := q.db.Query(ctx, listParameters, arg.OrgID, arg.Limit, arg.Offset)
+// Full version chain (#587): each version is a distinct parameters row (own id),
+// so history keyed by parameter_id is fragmented. Resolve the identity tuple of
+// parameter $1, then gather history across ALL rows sharing that tuple
+// (org_id, category, name, applies_to, COALESCE applies_to_id, COALESCE product),
+// ordered oldest->newest.
+func (q *Queries) GetParameterHistoryByIdentity(ctx context.Context, arg GetParameterHistoryByIdentityParams) ([]ParameterHistory, error) {
+	rows, err := q.db.Query(ctx, getParameterHistoryByIdentity, arg.ID, arg.OrgID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Parameter{}
+	items := []ParameterHistory{}
 	for rows.Next() {
-		var i Parameter
+		var i ParameterHistory
 		if err := rows.Scan(
 			&i.ID,
+			&i.ParameterID,
 			&i.OrgID,
-			&i.Category,
-			&i.Name,
-			&i.AppliesTo,
-			&i.AppliesToID,
-			&i.Product,
-			&i.Value,
-			&i.ValueType,
-			&i.Unit,
-			&i.Scope,
-			&i.EffectiveFrom,
-			&i.EffectiveUntil,
-			&i.Version,
-			&i.IsActive,
-			&i.CreatedBy,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listParametersFiltered = `-- name: ListParametersFiltered :many
-SELECT id, org_id, category, name, applies_to, applies_to_id, product, value, value_type, unit, scope, effective_from, effective_until, version, is_active, created_by, created_at, updated_at FROM parameters
-WHERE org_id = $1
-  AND ($4::TEXT IS NULL OR category = $4::TEXT)
-  AND ($5::TEXT IS NULL OR product = $5::TEXT)
-  AND ($6::TEXT IS NULL OR applies_to::TEXT = $6::TEXT)
-  AND is_active = TRUE
-ORDER BY name ASC, created_at DESC
-LIMIT $2 OFFSET $3
-`
-
-type ListParametersFilteredParams struct {
-	OrgID     pgtype.UUID `json:"org_id"`
-	Limit     int32       `json:"limit"`
-	Offset    int32       `json:"offset"`
-	Category  pgtype.Text `json:"category"`
-	Product   pgtype.Text `json:"product"`
-	AppliesTo pgtype.Text `json:"applies_to"`
-}
-
-// List parameters with optional category/product/applies_to filters.
-// Pass NULL to skip a filter. Used by admin UI list pages.
-func (q *Queries) ListParametersFiltered(ctx context.Context, arg ListParametersFilteredParams) ([]Parameter, error) {
-	rows, err := q.db.Query(ctx, listParametersFiltered,
-		arg.OrgID,
-		arg.Limit,
-		arg.Offset,
-		arg.Category,
-		arg.Product,
-		arg.AppliesTo,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Parameter{}
-	for rows.Next() {
-		var i Parameter
-		if err := rows.Scan(
-			&i.ID,
-			&i.OrgID,
-			&i.Category,
-			&i.Name,
-			&i.AppliesTo,
-			&i.AppliesToID,
-			&i.Product,
-			&i.Value,
-			&i.ValueType,
-			&i.Unit,
-			&i.Scope,
-			&i.EffectiveFrom,
-			&i.EffectiveUntil,
-			&i.Version,
-			&i.IsActive,
-			&i.CreatedBy,
-			&i.CreatedAt,
-			&i.UpdatedAt,
+			&i.PreviousValue,
+			&i.NewValue,
+			&i.ChangeType,
+			&i.PreviousVersion,
+			&i.NewVersion,
+			&i.ChangeReason,
+			&i.ChangeMetadata,
+			&i.ChangedBy,
+			&i.ChangedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -454,96 +506,126 @@ func (q *Queries) ListParameterCategories(ctx context.Context, orgID pgtype.UUID
 	return items, nil
 }
 
-const getParameterCategoryByCode = `-- name: GetParameterCategoryByCode :one
-SELECT id, org_id, code, name, description, value_schema, default_value, display_order, icon, color, is_active, created_by, created_at, updated_by, updated_at FROM parameter_categories
-WHERE org_id = $1 AND code = $2
+const listParameters = `-- name: ListParameters :many
+SELECT id, org_id, category, name, applies_to, applies_to_id, product, value, value_type, unit, scope, effective_from, effective_until, version, is_active, created_by, created_at, updated_by, updated_at FROM parameters
+WHERE org_id = $1
+ORDER BY created_at DESC
+LIMIT $2 OFFSET $3
 `
 
-type GetParameterCategoryByCodeParams struct {
-	OrgID pgtype.UUID `json:"org_id"`
-	Code  string      `json:"code"`
+type ListParametersParams struct {
+	OrgID  pgtype.UUID `json:"org_id"`
+	Limit  int32       `json:"limit"`
+	Offset int32       `json:"offset"`
 }
 
-func (q *Queries) GetParameterCategoryByCode(ctx context.Context, arg GetParameterCategoryByCodeParams) (ParameterCategory, error) {
-	row := q.db.QueryRow(ctx, getParameterCategoryByCode, arg.OrgID, arg.Code)
-	var i ParameterCategory
-	err := row.Scan(
-		&i.ID,
-		&i.OrgID,
-		&i.Code,
-		&i.Name,
-		&i.Description,
-		&i.ValueSchema,
-		&i.DefaultValue,
-		&i.DisplayOrder,
-		&i.Icon,
-		&i.Color,
-		&i.IsActive,
-		&i.CreatedBy,
-		&i.CreatedAt,
-		&i.UpdatedBy,
-		&i.UpdatedAt,
-	)
-	return i, err
+func (q *Queries) ListParameters(ctx context.Context, arg ListParametersParams) ([]Parameter, error) {
+	rows, err := q.db.Query(ctx, listParameters, arg.OrgID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Parameter{}
+	for rows.Next() {
+		var i Parameter
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrgID,
+			&i.Category,
+			&i.Name,
+			&i.AppliesTo,
+			&i.AppliesToID,
+			&i.Product,
+			&i.Value,
+			&i.ValueType,
+			&i.Unit,
+			&i.Scope,
+			&i.EffectiveFrom,
+			&i.EffectiveUntil,
+			&i.Version,
+			&i.IsActive,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedBy,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
-const createParameterCategory = `-- name: CreateParameterCategory :one
-INSERT INTO parameter_categories (
-    org_id, code, name, description, value_schema, default_value,
-    display_order, icon, color, is_active, created_by
-) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
-)
-RETURNING id, org_id, code, name, description, value_schema, default_value, display_order, icon, color, is_active, created_by, created_at, updated_by, updated_at
+const listParametersFiltered = `-- name: ListParametersFiltered :many
+SELECT id, org_id, category, name, applies_to, applies_to_id, product, value, value_type, unit, scope, effective_from, effective_until, version, is_active, created_by, created_at, updated_by, updated_at FROM parameters
+WHERE org_id = $1
+  AND ($4::TEXT IS NULL OR category = $4::TEXT)
+  AND ($5::TEXT IS NULL OR product = $5::TEXT)
+  AND ($6::TEXT IS NULL OR applies_to::TEXT = $6::TEXT)
+  AND is_active = TRUE
+ORDER BY name ASC, created_at DESC
+LIMIT $2 OFFSET $3
 `
 
-type CreateParameterCategoryParams struct {
-	OrgID        pgtype.UUID     `json:"org_id"`
-	Code         string          `json:"code"`
-	Name         string          `json:"name"`
-	Description  pgtype.Text     `json:"description"`
-	ValueSchema  json.RawMessage `json:"value_schema"`
-	DefaultValue json.RawMessage `json:"default_value"`
-	DisplayOrder pgtype.Int4     `json:"display_order"`
-	Icon         pgtype.Text     `json:"icon"`
-	Color        pgtype.Text     `json:"color"`
-	IsActive     bool            `json:"is_active"`
-	CreatedBy    pgtype.UUID     `json:"created_by"`
+type ListParametersFilteredParams struct {
+	OrgID     pgtype.UUID `json:"org_id"`
+	Limit     int32       `json:"limit"`
+	Offset    int32       `json:"offset"`
+	Category  pgtype.Text `json:"category"`
+	Product   pgtype.Text `json:"product"`
+	AppliesTo pgtype.Text `json:"applies_to"`
 }
 
-func (q *Queries) CreateParameterCategory(ctx context.Context, arg CreateParameterCategoryParams) (ParameterCategory, error) {
-	row := q.db.QueryRow(ctx, createParameterCategory,
+// List parameters with optional category/product/applies_to filters.
+// Pass NULL to skip a filter. Used by admin UI list pages.
+func (q *Queries) ListParametersFiltered(ctx context.Context, arg ListParametersFilteredParams) ([]Parameter, error) {
+	rows, err := q.db.Query(ctx, listParametersFiltered,
 		arg.OrgID,
-		arg.Code,
-		arg.Name,
-		arg.Description,
-		arg.ValueSchema,
-		arg.DefaultValue,
-		arg.DisplayOrder,
-		arg.Icon,
-		arg.Color,
-		arg.IsActive,
-		arg.CreatedBy,
+		arg.Limit,
+		arg.Offset,
+		arg.Category,
+		arg.Product,
+		arg.AppliesTo,
 	)
-	var i ParameterCategory
-	err := row.Scan(
-		&i.ID,
-		&i.OrgID,
-		&i.Code,
-		&i.Name,
-		&i.Description,
-		&i.ValueSchema,
-		&i.DefaultValue,
-		&i.DisplayOrder,
-		&i.Icon,
-		&i.Color,
-		&i.IsActive,
-		&i.CreatedBy,
-		&i.CreatedAt,
-		&i.UpdatedBy,
-		&i.UpdatedAt,
-	)
-	return i, err
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Parameter{}
+	for rows.Next() {
+		var i Parameter
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrgID,
+			&i.Category,
+			&i.Name,
+			&i.AppliesTo,
+			&i.AppliesToID,
+			&i.Product,
+			&i.Value,
+			&i.ValueType,
+			&i.Unit,
+			&i.Scope,
+			&i.EffectiveFrom,
+			&i.EffectiveUntil,
+			&i.Version,
+			&i.IsActive,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedBy,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const updateParameterCategory = `-- name: UpdateParameterCategory :one
@@ -569,7 +651,7 @@ type UpdateParameterCategoryParams struct {
 	Description  pgtype.Text     `json:"description"`
 	ValueSchema  json.RawMessage `json:"value_schema"`
 	DefaultValue json.RawMessage `json:"default_value"`
-	DisplayOrder pgtype.Int4     `json:"display_order"`
+	DisplayOrder int32           `json:"display_order"`
 	Icon         pgtype.Text     `json:"icon"`
 	Color        pgtype.Text     `json:"color"`
 	IsActive     bool            `json:"is_active"`
@@ -609,21 +691,4 @@ func (q *Queries) UpdateParameterCategory(ctx context.Context, arg UpdateParamet
 		&i.UpdatedAt,
 	)
 	return i, err
-}
-
-const deactivateParameterCategory = `-- name: DeactivateParameterCategory :exec
-UPDATE parameter_categories
-SET is_active = FALSE, updated_by = $3, updated_at = NOW()
-WHERE org_id = $1 AND code = $2
-`
-
-type DeactivateParameterCategoryParams struct {
-	OrgID     pgtype.UUID `json:"org_id"`
-	Code      string      `json:"code"`
-	UpdatedBy pgtype.UUID `json:"updated_by"`
-}
-
-func (q *Queries) DeactivateParameterCategory(ctx context.Context, arg DeactivateParameterCategoryParams) error {
-	_, err := q.db.Exec(ctx, deactivateParameterCategory, arg.OrgID, arg.Code, arg.UpdatedBy)
-	return err
 }

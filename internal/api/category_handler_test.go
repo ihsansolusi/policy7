@@ -51,7 +51,7 @@ func (m *schemaQuerier) ListParameterCategories(ctx context.Context, orgID pgtyp
 		Code:         "transaction_limit",
 		Name:         "Transaction Limits",
 		ValueSchema:  json.RawMessage(txnLimitSchemaJSON),
-		DisplayOrder: pgtype.Int4{Int32: 1, Valid: true},
+		DisplayOrder: 1,
 		IsActive:     true,
 	}}, nil
 }

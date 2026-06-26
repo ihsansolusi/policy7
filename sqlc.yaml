@@ -19,3 +19,11 @@ sql:
           - db_type: "jsonb"
             nullable: true
             go_type: "encoding/json.RawMessage"
+          # Postgres ENUMs → plain string (otherwise sqlc emits interface{}).
+          # Keeps generated structs strongly typed (was hand-patched before).
+          - db_type: "parameters_applies_to_enum"
+            go_type: "string"
+          - db_type: "parameters_value_type_enum"
+            go_type: "string"
+          - db_type: "parameter_history_change_type_enum"
+            go_type: "string"

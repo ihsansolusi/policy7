@@ -58,9 +58,7 @@ func toCategoryResponse(c store.ParameterCategory) categoryResponse {
 	if c.Description.Valid {
 		resp.Description = c.Description.String
 	}
-	if c.DisplayOrder.Valid {
-		resp.DisplayOrder = c.DisplayOrder.Int32
-	}
+	resp.DisplayOrder = c.DisplayOrder
 	if c.Icon.Valid {
 		resp.Icon = c.Icon.String
 	}
@@ -151,7 +149,7 @@ type mergedCategory struct {
 	Description  pgtype.Text
 	ValueSchema  json.RawMessage
 	DefaultValue json.RawMessage
-	DisplayOrder pgtype.Int4
+	DisplayOrder int32
 	Icon         pgtype.Text
 	Color        pgtype.Text
 	IsActive     bool
@@ -181,7 +179,7 @@ func mergeCategory(current store.ParameterCategory, req categoryWriteRequest) me
 		m.DefaultValue = req.DefaultValue
 	}
 	if req.DisplayOrder != nil {
-		m.DisplayOrder = pgtype.Int4{Int32: *req.DisplayOrder, Valid: true}
+		m.DisplayOrder = *req.DisplayOrder
 	}
 	if req.Icon != nil {
 		m.Icon = optText(req.Icon)
@@ -231,11 +229,14 @@ func optText(s *string) pgtype.Text {
 	return pgtype.Text{String: *s, Valid: true}
 }
 
-func optInt4(i *int32) pgtype.Int4 {
+// derefInt32 returns *i, or 0 when nil. display_order is NOT NULL; the generated
+// INSERT lists the column (bypassing its DB DEFAULT), so an absent value is made
+// explicit as 0 here.
+func derefInt32(i *int32) int32 {
 	if i == nil {
-		return pgtype.Int4{Valid: false}
+		return 0
 	}
-	return pgtype.Int4{Int32: *i, Valid: true}
+	return *i
 }
 
 func isDuplicateKey(err error) bool {
